@@ -23,7 +23,7 @@ func main() {
 	var str string = args[1]
 
 	// myif, err := NewExampleKv(val, str)
-	_, err = kv.NewIntfInst(val, str)
+	_, err = kv.NewKvStoreInstance(val, str)
 	if err != nil {
 		fmt.Printf("could not create kv interface: %s\n", err)
 		os.Exit(1)
