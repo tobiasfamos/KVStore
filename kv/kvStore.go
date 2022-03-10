@@ -8,29 +8,21 @@ import (
 const MaxMem = 1 << (10 * 3) // 1 GB
 const defPath = "."          // create in local directory
 
-type kvStore interface {
-	put(a1 uint64, a2 [10]byte)
-	get(a1 uint64) [10]byte
+type KeyValueStore interface {
+	Put(a1 uint64, a2 [10]byte)
+	Get(a1 uint64) [10]byte
+	Create(path string)
+	Open(path string)
+	Delete()
+	Close()
 }
 
-type kvStoreControl interface {
-	open()
-	delete()
-	close()
+type kvStoreConfig struct {
+	memorySize       int
+	workingDirectory string
 }
 
-type kvStoreStub struct {
-}
-
-func (kvStoreStub) put(a1 uint64, a2 [10]byte) {
-	fmt.Printf("Add at key %d value %s", a1, a2)
-}
-
-func (kvStoreStub) get(a1 int) [10]byte {
-	return [10]byte{10, 10, 1}
-}
-
-func NewKvStoreInstance(size int, path string) (*kvStore, error) {
+func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
 	if size > MaxMem || size == 0 {
 		return nil, errors.New("'size' is out of range")
 	}
