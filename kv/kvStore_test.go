@@ -28,6 +28,24 @@ func TestIntfSize(t *testing.T) {
 	}
 }
 
+// Todo Test Adding one Key value
+
+// TODO Test Adding multiple key values
+
+// Todo test key not found
+
+// TODO Test Delete
+
+// TODO Test Create
+
+// TODO Test Create Working Directory
+
+// TODO Test Create working Directory Default
+
+// TODO Test adding existing Key
+
+// TODO Stresstest with many Keys
+
 func TestKVStoreStub(t *testing.T) {
 	kvStub := new(stub.KvStoreStub)
 	fmt.Println(kvStub.Get(12))
