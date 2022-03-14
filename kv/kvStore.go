@@ -13,7 +13,7 @@ type KeyValueStore interface {
 	Get(a1 uint64) [10]byte
 	Create(path string)
 	Open(path string)
-	Delete()
+	Delete(path string)
 	Close()
 }
 
