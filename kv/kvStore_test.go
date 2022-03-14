@@ -46,6 +46,8 @@ func TestIntfSize(t *testing.T) {
 
 // TODO Stresstest with many Keys
 
+// Todo test for data structure full (elements > size)
+
 func TestKVStoreStub(t *testing.T) {
 	kvStub := new(stub.KvStoreStub)
 	fmt.Println(kvStub.Get(12))
