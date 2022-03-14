@@ -22,7 +22,7 @@ func (KvStoreStub) Create(path string) {
 
 }
 
-func (KvStoreStub) Delete() {
+func (KvStoreStub) Delete(path string) {
 
 }
 func (KvStoreStub) Close() {
