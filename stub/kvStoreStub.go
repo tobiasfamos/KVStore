@@ -2,6 +2,7 @@ package stub
 
 import (
 	"fmt"
+	"github.com/tobiasfamos/KVStore/kv"
 )
 
 type KvStoreStub struct {
@@ -18,8 +19,7 @@ func (KvStoreStub) Get(a1 uint64) [10]byte {
 func (KvStoreStub) Open(path string) {
 }
 
-func (KvStoreStub) Create(path string) {
-
+func (KvStoreStub) Create(config kv.KvStoreConfig) {
 }
 
 func (KvStoreStub) Delete(path string) {

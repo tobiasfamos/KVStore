@@ -11,13 +11,13 @@ const defPath = "."          // create in local directory
 type KeyValueStore interface {
 	Put(a1 uint64, a2 [10]byte)
 	Get(a1 uint64) [10]byte
-	Create(path string)
+	Create(config KvStoreConfig)
 	Open(path string)
 	Delete(path string)
 	Close()
 }
 
-type kvStoreConfig struct {
+type KvStoreConfig struct {
 	memorySize       int
 	workingDirectory string
 }
