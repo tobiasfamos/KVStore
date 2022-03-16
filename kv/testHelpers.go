@@ -1,7 +1,5 @@
 package kv
 
-import "github.com/tobiasfamos/KVStore/stub"
-
 type TestHelper interface {
 	GetWorkingDirectory(store KeyValueStore) string
 	GetEmptyInstance() KeyValueStore
@@ -15,7 +13,7 @@ func (StubTestHelper) GetWorkingDirectory(store KeyValueStore) string {
 }
 
 func (StubTestHelper) GetEmptyInstance() KeyValueStore {
-	return new(stub.KvStoreStub)
+	return new(KvStoreStub)
 }
 
 func NewStubTestHelper() TestHelper {

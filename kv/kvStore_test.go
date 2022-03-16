@@ -2,9 +2,9 @@ package kv
 
 import (
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	stub "github.com/tobiasfamos/KVStore/stub"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 var testHelper = NewStubTestHelper()
@@ -49,7 +49,7 @@ func TestIntfSize(t *testing.T) {
 // Todo test for data structure full (elements > size)
 
 func TestKVStoreStub(t *testing.T) {
-	kvStub := new(stub.KvStoreStub)
+	kvStub := new(KvStoreStub)
 	fmt.Println(kvStub.Get(12))
 	kvStub.Put(12, [10]byte{1})
 	assert.Equal(t, true, true)
