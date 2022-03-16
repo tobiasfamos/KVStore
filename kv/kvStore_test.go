@@ -1,6 +1,8 @@
 package kv
 
 import (
+	"errors"
+	"io/ioutil"
 	"os"
 	"testing"
 )
@@ -42,7 +44,7 @@ func TestIntfSize(t *testing.T) {
 func TestGetAndPut(t *testing.T) {
 	// Happy-case Get() and Put() will be tested together, as there's
 	// really no way to do one without the other.
-	kv := helper.GetEmptyInstance()
+	kv, _ := helper.GetEmptyInstance()
 
 	tests := []struct {
 		key   uint64
@@ -80,7 +82,7 @@ func TestGetAndPut(t *testing.T) {
 }
 
 func TestPutExistingElement(t *testing.T) {
-	kv := helper.GetEmptyInstance()
+	kv, _ := helper.GetEmptyInstance()
 
 	err := kv.Put(1, [10]byte{})
 	if err != nil {
@@ -94,7 +96,7 @@ func TestPutExistingElement(t *testing.T) {
 }
 
 func TestGetNonexistantElement(t *testing.T) {
-	kv := helper.GetEmptyInstance()
+	kv, _ := helper.GetEmptyInstance()
 
 	_, err := kv.Get(1)
 	if err == nil {
@@ -103,7 +105,7 @@ func TestGetNonexistantElement(t *testing.T) {
 }
 
 func TestGetPutExceedingMemory(t *testing.T) {
-	kv := helper.GetEmptyInstanceWithMemoryLimit(1000)
+	kv, _ := helper.GetEmptyInstanceWithMemoryLimit(1000)
 
 	// Each key/value pair will use up 8+10 = 18 bytes, so <56 will fit in
 	// memory.
@@ -116,6 +118,7 @@ func TestGetPutExceedingMemory(t *testing.T) {
 		}
 	}
 
+	// Make sure they're all present
 	for i := uint64(0); i < 100; i++ {
 		val, err := kv.Get(i)
 		if err != nil {
@@ -123,7 +126,8 @@ func TestGetPutExceedingMemory(t *testing.T) {
 		}
 
 		if val != [10]byte{byte(i)} {
-			t.Errorf(
+			// We'll abort early so as not to spam the log with test failures
+			t.Fatalf(
 				"Got unexpected value %v for key %d; expected %v",
 				val,
 				i,
@@ -134,27 +138,79 @@ func TestGetPutExceedingMemory(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
+	kv := KvStoreStub{}
+
+	dir, err := ioutil.TempDir(helper.WorkingDirectory, "kv_store_")
+	defer os.RemoveAll(dir)
+	if err != nil {
+		t.Fatalf("Unable to create temporary working directory: %v", err)
+	}
+
+	err = kv.Create(
+		KvStoreConfig{
+			memorySize:       100_000_000,
+			workingDirectory: dir,
+		},
+	)
+	if err != nil {
+		t.Errorf("Unable to create new KV store: %v", err)
+	}
 }
 
-func TestOpen(t *testing.T) {
+func TestOpenAndClose(t *testing.T) {
+	// Open and close will be tested together as well, since one cannot be
+	// tested without the other.
+
+	kv, dir := helper.GetEmptyInstance()
+
+	// We'll add an entry, close the KV store then reopen it and ensure
+	// it's still present.
+	err := kv.Put(1, [10]byte{42})
+	if err != nil {
+		t.Fatalf("Error putting element 1: %v", err)
+	}
+
+	err = kv.Close()
+	if err != nil {
+		t.Fatalf("Error closing KV store: %v", err)
+	}
+
+	err = kv.Open(dir)
+	if err != nil {
+		t.Fatalf("Error opening KV store: %v", err)
+	}
+
+	val, err := kv.Get(1)
+	if err != nil {
+		t.Fatalf("Error getting element %d: %v", 1, err)
+	}
+
+	if val != [10]byte{42} {
+		t.Errorf(
+			"Got unexpected value %v for key %d; expected %v",
+			1,
+			val,
+			[10]byte{42},
+		)
+	}
 }
 
 func TestDelete(t *testing.T) {
+	kv, dir := helper.GetEmptyInstance()
+
+	err := kv.Delete()
+	if err != nil {
+		t.Fatalf("Error deleting KV store: %v", err)
+	}
+
+	_, err = os.Stat(dir)
+	if !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("Expected KV directory %s to not exist anymore, but did.", dir)
+	}
+
 }
 
-func TestClose(t *testing.T) {
-}
-
-// TODO Test Delete
-
-// TODO Test Create
-
-// TODO Test Create Working Directory
-
-// TODO Test Create working Directory Default
-
-// TODO Test adding existing Key
-
-// TODO Stresstest with many Keys
-
-// Todo test for data structure full (elements > size)
+// TODO: Future tests which might be required, depending on functionality of open/delete/...
+// - Get/Put without having opened KV store should error sanely
+// - Open should probably error if one already opened. Alternatively should close existing one.
+// - Close should error if none open

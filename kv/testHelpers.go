@@ -12,6 +12,9 @@ type TestHelper struct {
 	WorkingDirectory string
 }
 
+// Initialize initializes the helper.
+//
+// This should be called in the test suite's setup method.
 func (helper *TestHelper) Initialize() {
 	dir, err := ioutil.TempDir("/tmp", "kv_store_testrun_")
 	if err != nil {
@@ -22,6 +25,9 @@ func (helper *TestHelper) Initialize() {
 	helper.WorkingDirectory = dir
 }
 
+// Cleanup performs required cleanup operations.
+//
+// This should be called in the test suite's teardown method.
 func (helper *TestHelper) Cleanup() {
 	log.Printf("Cleaning up working directory of KV stores in %s", helper.WorkingDirectory)
 	err := os.RemoveAll(helper.WorkingDirectory)
@@ -31,14 +37,15 @@ func (helper *TestHelper) Cleanup() {
 	}
 }
 
-// GetEmptyInstance provides a new ready-to-use KV store.
-func (helper *TestHelper) GetEmptyInstance() KeyValueStore {
-	return helper.GetEmptyInstanceWithMemoryLimit(100_000_000) // 1 MB
+// GetEmptyInstance provides a new ready-to-use KV store, with a memory limit
+// of 100MB and a temporary working directory.
+func (helper *TestHelper) GetEmptyInstance() (KeyValueStore, string) {
+	return helper.GetEmptyInstanceWithMemoryLimit(100_000_000) // 100 MB
 }
 
 // GetEmptyInstanceWithMemoryLimit provides a new ready-to-use KV store with a
-// custom memory limit.
-func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit int) KeyValueStore {
+// custom memory limit. It also returns the working directory of the KV store.
+func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit int) (KeyValueStore, string) {
 	kv := KvStoreStub{}
 
 	dir, err := ioutil.TempDir(helper.WorkingDirectory, "kv_store_")
@@ -56,5 +63,5 @@ func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit int) KeyVa
 		log.Fatalf("Unable to initialize KV store: %v", err)
 	}
 
-	return kv
+	return kv, dir
 }

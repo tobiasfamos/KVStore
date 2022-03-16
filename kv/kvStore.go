@@ -22,9 +22,9 @@ type KeyValueStore interface {
 	// Open opens an existing KV store from disk. If loading fails, an
 	// error is returned.
 	Open(path string) error
-	// Delete deletes an existing KV store on disk. If deletion fails, an
+	// Delete deletes the currently opened KV store. If deletion fails, an
 	// error is returned.
-	Delete(path string) error
+	Delete() error
 	// Close persists the active KV store to disk and unloads it. If it
 	// fails, an error is returned.
 	Close() error
@@ -67,7 +67,7 @@ func (KvStoreStub) Create(config KvStoreConfig) error {
 	return nil
 }
 
-func (KvStoreStub) Delete(path string) error {
+func (KvStoreStub) Delete() error {
 	return nil
 
 }
