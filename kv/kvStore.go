@@ -31,3 +31,31 @@ func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
 	}
 	return nil, nil
 }
+
+type KvStoreStub struct {
+}
+
+func (KvStoreStub) Put(key uint64, value [10]byte) {
+	fmt.Printf("Add at key %d value %s", key, value)
+}
+
+func (KvStoreStub) Get(a1 uint64) [10]byte {
+	return [10]byte{10, 10, 1}
+}
+
+func (KvStoreStub) Open(path string) error {
+	return nil
+}
+
+func (KvStoreStub) Create(config KvStoreConfig) error {
+	return nil
+}
+
+func (KvStoreStub) Delete(path string) error {
+	return nil
+
+}
+func (KvStoreStub) Close() error {
+	return nil
+
+}
