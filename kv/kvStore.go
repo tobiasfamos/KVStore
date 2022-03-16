@@ -5,8 +5,8 @@ import (
 	"fmt"
 )
 
-const MaxMem = 1 << (10 * 3) // 1 GB
-const defPath = "."          // create in local directory
+const MaxMem = 1 << (10 * 3) // Do not allow KV stores to use more than 1GB of memory
+const DefaultPath = "."      // Default to current working directory to persist KV store
 
 // KeyValueStore defines the interface to be implemented by the KV store.
 type KeyValueStore interface {
@@ -30,14 +30,15 @@ type KeyValueStore interface {
 	Close() error
 }
 
+// KVStoreConfig provides parameters used to initialize a new KV store.
 type KvStoreConfig struct {
-	memorySize       int
-	workingDirectory string
+	memorySize       int    // Maximum amount of memory to be used by KV store
+	workingDirectory string // Directory on disk in which KV store will be persisted
 }
 
 func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
-	if size > MaxMem || size == 0 {
-		return nil, errors.New("'size' is out of range")
+	if size > MaxMem || size < 0 {
+		return nil, fmt.Errorf("'size' must be between 0 and %d", MaxMem)
 	}
 	if len(path) == 0 {
 		return nil, errors.New("'path' is not valid")
@@ -45,11 +46,12 @@ func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
 	return nil, nil
 }
 
+// KvStoreStub is a stubbed implementation of the KV interface. It allows
+// building the project and running the tests in the first phase.
 type KvStoreStub struct {
 }
 
 func (KvStoreStub) Put(key uint64, value [10]byte) error {
-	fmt.Printf("Add at key %d value %s", key, value)
 	return nil
 }
 
