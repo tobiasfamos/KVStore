@@ -16,7 +16,8 @@ func (KvStoreStub) Get(a1 uint64) [10]byte {
 	return [10]byte{10, 10, 1}
 }
 
-func (KvStoreStub) Open(path string) {
+func (KvStoreStub) Open(path string) error {
+  return nil
 }
 
 func (KvStoreStub) Create(config kv.KvStoreConfig) {
