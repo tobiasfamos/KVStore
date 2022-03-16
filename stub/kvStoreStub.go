@@ -20,7 +20,8 @@ func (KvStoreStub) Open(path string) error {
   return nil
 }
 
-func (KvStoreStub) Create(config kv.KvStoreConfig) {
+func (KvStoreStub) Create(config kv.KvStoreConfig) error {
+  return nil
 }
 
 func (KvStoreStub) Delete(path string) error {
