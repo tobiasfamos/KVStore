@@ -27,7 +27,6 @@ func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
 		return nil, errors.New("'size' is out of range")
 	}
 	if len(path) == 0 {
-		fmt.Println(path)
 		return nil, errors.New("'path' is not valid")
 	}
 	return nil, nil
