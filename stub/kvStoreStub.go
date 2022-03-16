@@ -8,7 +8,7 @@ import (
 type KvStoreStub struct {
 }
 
-func (KvStoreStub) Put(a1 uint64, a2 [10]byte) {
+func (KvStoreStub) Put(key uint64, value [10]byte) {
 	fmt.Printf("Add at key %d value %s", a1, a2)
 }
 
