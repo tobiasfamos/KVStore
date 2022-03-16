@@ -27,6 +27,7 @@ func (KvStoreStub) Delete(path string) error {
   return nil
 
 }
-func (KvStoreStub) Close() {
+func (KvStoreStub) Close() error {
+  return nil
 
 }
