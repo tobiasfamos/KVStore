@@ -10,7 +10,7 @@ const defPath = "."          // create in local directory
 
 type KeyValueStore interface {
 	Put(key uint64, value [10]byte)
-	Get(a1 uint64) [10]byte
+	Get(key uint64) [10]byte
 	Create(config KvStoreConfig)
 	Open(path string)
 	Delete(path string)
