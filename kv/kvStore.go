@@ -13,18 +13,23 @@ type KeyValueStore interface {
 	// Put stores a new item with given key and value in the KV store. If
 	// an item with the requested key already exists, an error is returned.
 	Put(key uint64, value [10]byte) error
+
 	// Get retrieves an item with given key rom the KV store. If no item
 	// with the requested key exists, an error is returned.
 	Get(key uint64) ([10]byte, error)
+
 	// Create initializes a new instance of the KV store with the supplied
 	// parameters. If creation fails, an error is returned.
 	Create(config KvStoreConfig) error
+
 	// Open opens an existing KV store from disk. If loading fails, an
 	// error is returned.
 	Open(path string) error
+
 	// Delete deletes the currently opened KV store. If deletion fails, an
 	// error is returned.
 	Delete() error
+
 	// Close persists the active KV store to disk and unloads it. If it
 	// fails, an error is returned.
 	Close() error
@@ -32,7 +37,7 @@ type KeyValueStore interface {
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
 type KvStoreConfig struct {
-	memorySize       int    // Maximum amount of memory to be used by KV store
+	memorySize       uint   // Maximum amount of memory to be used by KV store
 	workingDirectory string // Directory on disk in which KV store will be persisted
 }
 
