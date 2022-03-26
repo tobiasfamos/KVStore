@@ -1,6 +1,8 @@
 package search
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestBinary(t *testing.T) {
 	vals := []uint32{1, 7, 12, 13, 22, 153}
@@ -17,8 +19,11 @@ func TestBinary(t *testing.T) {
 		{22, 4, true},
 		{153, 5, true},
 		{0, 0, false},
-		{42, 0, false},
-		{154, 0, false},
+		{8, 2, false},
+		{21, 4, false},
+		{23, 5, false},
+		{42, 5, false},
+		{154, 6, false},
 	}
 
 	for _, test := range tests {
@@ -40,10 +45,20 @@ func TestBinary(t *testing.T) {
 				)
 			}
 		} else {
+			// Element expected not to exist
 			if exists {
 				t.Errorf(
 					"Expected element %d to not exist, but did at index %d",
 					test.value,
+					idx,
+				)
+			}
+
+			if idx != test.index {
+				t.Errorf(
+					"Expected non-existant element %d to have next-greater index %d; but had %d",
+					test.value,
+					test.index,
 					idx,
 				)
 			}
