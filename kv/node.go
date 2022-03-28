@@ -68,9 +68,9 @@ For <n = numKeys> used keys there must be <n+1> valid relations to the page IDs.
 An InternalNode takes at most InternalNodeSize bytes in memory.
 */
 type InternalNode struct {
-	numKeys uint16
 	keys    [NumInternalKeys]uint64
 	pages   [NumInternalKeys + 1]uint32
+	numKeys uint16
 }
 
 /*
@@ -81,9 +81,9 @@ For <n = numKeys> used keys, there are also <n> values.
 A LeafNode takes at most LeafNodeSize bytes in memory.
 */
 type LeafNode struct {
-	numKeys uint16
 	keys    [NumLeafKeys]uint64
 	values  [NumLeafKeys][10]byte
+	numKeys uint16
 }
 
 // decodeInternalNode() decodes a byte slice of a least length InternalNodeSize into an InternalNode.
