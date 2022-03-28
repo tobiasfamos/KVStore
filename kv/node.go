@@ -32,9 +32,6 @@ Solving with page size <S> for <n> we get:
 For a page size of 4096 we get <n> = 227
 */
 
-// PageSize is the default page size for both InternalNode and LeafNode to reside in.
-const PageSize = 4096
-
 // NodeDataStartIndex is the starting index for the actual node information for both InternalNode and LeafNode.
 const NodeDataStartIndex = 8
 
