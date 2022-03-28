@@ -5,28 +5,50 @@ import (
 )
 
 /*
-following results stem from a 4096-byte page with
-- 4-byte page ID
-- 1 byte bitflag mask
+A page consists of <S> bytes and
+- <1> uint32 (4 bytes) for page ID
+- <1> byte for bitflag mask for page identification
+- <3> byte reserved for 32bit alignment
+Therefore the data section for nodes consists of <S-8> bytes.
+
+An InternalNode consists of
+- <1> uint16 (2 bytes)
+- <n> uint64 (8 bytes)
+- <n+1> uint32 (4 bytes)
+Therefore it takes (6 + 12n) bytes of storage space.
+Solving with page size <S> for <n> we get:
+	S - 8 = 2 + 8n + 4(n+1)
+ =>     n = (S - 14) / 12
+For a page size of 4096 we get <n> = 340
+
+A LeafNode consists of
+- <1> uint16 (2 bytes)
+- <n> uint64 (8 bytes)
+- <n> [10]byte (10 bytes)
+Therefore it takes (2 + 18n) bytes of  we get:storage space.
+Solving with page size <S> for <n> we get:
+	S - 8 = 2 + 18n
+ =>     n = (S - 10) / 18
+For a page size of 4096 we get <n> = 227
 */
 
 // PageSize is the default page size for both InternalNode and LeafNode to reside in.
 const PageSize = 4096
 
 // NodeDataStartIndex is the starting index for the actual node information for both InternalNode and LeafNode.
-const NodeDataStartIndex = 5
+const NodeDataStartIndex = 8
 
 // NumInternalKeys is the number of keys an InternalNode may hold at any given time.
-const NumInternalKeys = 340
+const NumInternalKeys = (PageSize - NodeDataStartIndex - KeyStartIndex - 4) / 12
 
 // InternalNodeSize is the size in bytes that an InternalNode uses.
-const InternalNodeSize = 4086
+const InternalNodeSize = 6 + 12*NumInternalKeys
 
 // NumLeafKeys is the number of keys a LeafNode may hold at any given time.
-const NumLeafKeys = 227
+const NumLeafKeys = (PageSize - NodeDataStartIndex - KeyStartIndex) / 18
 
 // LeafNodeSize is the size in bytes that a LeafNode uses.
-const LeafNodeSize = 4088
+const LeafNodeSize = 2 + 18*NumLeafKeys
 
 // KeyStartIndex is the starting index for keys for both InternalNode and LeafNode.
 const KeyStartIndex = 2
