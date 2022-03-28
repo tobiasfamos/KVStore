@@ -8,7 +8,7 @@ import (
 A page consists of <S> bytes and
 - <1> uint32 (4 bytes) for page ID
 - <1> byte for bitflag mask for page identification
-- <3> byte reserved for 32bit alignment
+- <3> bytes for 32-bit alignment
 Therefore the data section for nodes consists of <S-8> bytes.
 
 An InternalNode consists of
@@ -42,13 +42,13 @@ const NodeDataStartIndex = 8
 const NumInternalKeys = (PageSize - NodeDataStartIndex - KeyStartIndex - 4) / 12
 
 // InternalNodeSize is the size in bytes that an InternalNode uses.
-const InternalNodeSize = 6 + 12*NumInternalKeys
+const InternalNodeSize = KeyStartIndex + 4 + 12*NumInternalKeys
 
 // NumLeafKeys is the number of keys a LeafNode may hold at any given time.
 const NumLeafKeys = (PageSize - NodeDataStartIndex - KeyStartIndex) / 18
 
 // LeafNodeSize is the size in bytes that a LeafNode uses.
-const LeafNodeSize = 2 + 18*NumLeafKeys
+const LeafNodeSize = KeyStartIndex + 18*NumLeafKeys
 
 // KeyStartIndex is the starting index for keys for both InternalNode and LeafNode.
 const KeyStartIndex = 2
