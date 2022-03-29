@@ -185,6 +185,21 @@ func (b *BufferPool) UnpinPage(pageID PageID, isDirty bool) error {
 	return errors.New("page not found")
 }
 
+func NewBufferPool() BufferPool {
+	dist := NewRAMDisk(120000)
+	pageLookup := make(map[PageID]FrameID)
+	lfuCache := NewLFUCache(1200000)
+	var freeFrames []FrameID
+	localBufferPool := BufferPool{
+		disk:       dist,
+		pages:      [16]*Page{},
+		pageLookup: pageLookup,
+		eviction:   &lfuCache,
+		freeFrames: freeFrames,
+	}
+	return localBufferPool
+}
+
 /*
 getFrame returns a frame.
 The frame may either be from the
