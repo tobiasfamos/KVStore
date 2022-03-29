@@ -3,19 +3,19 @@ package kv
 import "time"
 
 /*
-LFUCache is a Least Frequently Used cache algorithm.
+LRUCache is a Least Recently Used cache algorithm.
 */
-type LFUCache struct {
+type LRUCache struct {
 	items map[FrameID]time.Time
 }
 
-func NewLFUCache(size uint) LFUCache {
-	return LFUCache{
+func NewLRUCache(size uint) LRUCache {
+	return LRUCache{
 		items: make(map[FrameID]time.Time, size),
 	}
 }
 
-func (c *LFUCache) Victim() *FrameID {
+func (c *LRUCache) Victim() *FrameID {
 	if len(c.items) == 0 {
 		return nil
 	}
@@ -35,10 +35,10 @@ func (c *LFUCache) Victim() *FrameID {
 	return &oldestID
 }
 
-func (c *LFUCache) Remove(frameID FrameID) {
+func (c *LRUCache) Remove(frameID FrameID) {
 	delete(c.items, frameID)
 }
 
-func (c *LFUCache) Add(frameID FrameID) {
+func (c *LRUCache) Add(frameID FrameID) {
 	c.items[frameID] = time.Now()
 }
