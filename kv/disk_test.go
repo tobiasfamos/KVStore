@@ -14,7 +14,7 @@ func TestDisk_AllocatePage(t *testing.T) {
 	disks := emptyDisks()
 
 	for _, disk := range disks {
-		for i := uint32(0); i < disk.Capacity(); i++ {
+		for i := uint(0); i < disk.Capacity(); i++ {
 			page, err := disk.AllocatePage()
 
 			if err != nil {
@@ -45,7 +45,7 @@ func TestDisk_DeallocatePage(t *testing.T) {
 	disks := emptyDisks()
 
 	for _, disk := range disks {
-		for i := uint32(0); i < disk.Capacity(); i++ {
+		for i := uint(0); i < disk.Capacity(); i++ {
 			for j := i; j < disk.Capacity(); j++ {
 				page, _ := disk.AllocatePage()
 				if page.id != PageID(i) {
@@ -65,7 +65,7 @@ func TestDisk_ReadPage(t *testing.T) {
 	disks := emptyDisks()
 
 	for _, disk := range disks {
-		for i := uint32(0); i < disk.Capacity(); i++ {
+		for i := uint(0); i < disk.Capacity(); i++ {
 			newPage, _ := disk.AllocatePage()
 			page, err := disk.ReadPage(newPage.id)
 			if err != nil {

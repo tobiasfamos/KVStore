@@ -87,7 +87,7 @@ func (store *BPlusStore) Create(config KvStoreConfig) error {
 	//TODo Replace with better value
 	numberOfPages := config.memorySize / PageSize
 	newCacheEviction := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(uint32(config.memorySize), 12)
+	newRamDisk := NewRAMDisk(config.memorySize, 12)
 	localBufferPool := NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
 	store.bufferPool = localBufferPool
 	newPage, err := store.bufferPool.NewPage()

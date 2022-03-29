@@ -6,7 +6,7 @@ import (
 )
 
 // FrameID is the cache frame ID (index) associated with a Page.
-type FrameID uint32
+type FrameID uint
 
 /*
 BufferPool is a cache-like structure that buffers Pages from a Disk.
