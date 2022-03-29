@@ -2,9 +2,8 @@ package kv
 
 import (
 	"errors"
+	"fmt"
 )
-
-const MaxPoolSize = 16
 
 // FrameID is the cache frame ID (index) associated with a Page.
 type FrameID uint32
@@ -14,10 +13,23 @@ BufferPool is a cache-like structure that buffers Pages from a Disk.
 */
 type BufferPool struct {
 	disk       Disk
-	pages      [MaxPoolSize]*Page
+	pages      []*Page
 	pageLookup map[PageID]FrameID
 	eviction   CacheEviction
 	freeFrames []FrameID
+}
+
+/*
+NewBufferPool creates a new buffer pool with a given size (number of pages).
+*/
+func NewBufferPool(size uint, disk Disk, eviction CacheEviction) BufferPool {
+	return BufferPool{
+		disk:       disk,
+		pages:      make([]*Page, size),
+		pageLookup: make(map[PageID]FrameID, size),
+		eviction:   eviction,
+		freeFrames: make([]FrameID, size),
+	}
 }
 
 /*
@@ -82,7 +94,7 @@ func (b *BufferPool) FetchPage(pageID PageID) (*Page, error) {
 		return nil, err
 	}
 
-	page.pinCount = 1
+	page.pinCount++
 	b.pageLookup[pageID] = *frameID
 	b.pages[*frameID] = page
 
@@ -157,7 +169,7 @@ func (b *BufferPool) DeletePage(pageID PageID) error {
 		return errors.New("page cannot be deleted from buffer: pin count > 0")
 	}
 	if page.id != pageID {
-		return errors.New("inconsistent state: page.id != pageID") // good to catch logic bugs
+		return fmt.Errorf("incostent state: page.id (%d) != pageID (%d)", page.id, pageID) // good to catch logic bugs
 	}
 
 	delete(b.pageLookup, pageID)
