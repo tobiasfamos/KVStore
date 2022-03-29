@@ -45,22 +45,22 @@ This method returns an error if there are
 */
 func (b *BufferPool) NewPage() (*Page, error) {
 	// get next free frame or evict from cache
-	frameID, err := b.getFrame()
-	if err != nil {
-		return nil, err
+	fh := b.getFrame()
+	if fh.err != nil {
+		return nil, fh.err
 	}
 
 	// allocate new page from disk
-	page, err := b.disk.AllocatePage()
-	if err != nil {
-		return nil, err
+	fh.AllocatePage()
+	if fh.err != nil {
+		return nil, fh.err
 	}
 
-	page.pinCount = 1
-	b.pageLookup[page.id] = *frameID
-	b.pages[*frameID] = page
+	fh.page.pinCount = 1
+	b.pageLookup[fh.page.id] = *fh.frameID
+	b.pages[*fh.frameID] = fh.page
 
-	return page, nil
+	return fh.page, nil
 }
 
 /*
@@ -81,22 +81,22 @@ func (b *BufferPool) FetchPage(pageID PageID) (*Page, error) {
 	}
 
 	// get next free frame or evict from cache
-	frameID, err := b.getFrame()
-	if err != nil {
-		return nil, err
+	fh := b.getFrame()
+	if fh.err != nil {
+		return nil, fh.err
 	}
 
 	// try fetch from disk
-	page, err := b.disk.ReadPage(pageID)
-	if err != nil {
-		return nil, err
+	fh.ReadPage(pageID)
+	if fh.err != nil {
+		return nil, fh.err
 	}
 
-	page.pinCount++
-	b.pageLookup[pageID] = *frameID
-	b.pages[*frameID] = page
+	fh.page.pinCount++
+	b.pageLookup[pageID] = *fh.frameID
+	b.pages[*fh.frameID] = fh.page
 
-	return page, nil
+	return fh.page, nil
 }
 
 /*
@@ -234,9 +234,12 @@ The frame may either be from the
 - cache eviction
 If evicted, the frame gets removed from cache, potentially flushing to disk if the associated page was dirty.
 
-Returns an error if no frame can be allocated or flushing to disk fails.
+The 2nd returned value indicates if the FrameID was evicted from eviction.
+The 3rd returned value indicates an error if no frame could be allocated or flushing to disk failed.
+
+Upon ANY error, the caller must make sure to re-add the FrameID into the eviction.
 */
-func (b *BufferPool) getFrame() (*FrameID, error) {
+func (b *BufferPool) getFrame() FrameHelper {
 	var frameID *FrameID
 	isEvicted := false
 
@@ -245,13 +248,11 @@ func (b *BufferPool) getFrame() (*FrameID, error) {
 		frameID = &b.freeFrames[0]
 		b.freeFrames = b.freeFrames[1:]
 	} else {
-		frameID = b.eviction.Victim()
+		// no free frame found
+		if frameID = b.eviction.Victim(); frameID == nil {
+			return newFrameHelper(b, frameID, nil, errors.New("unable to reserve buffer frame"), false)
+		}
 		isEvicted = true
-	}
-
-	// no free frame found
-	if frameID == nil {
-		return nil, errors.New("unable to reserve buffer frame")
 	}
 
 	// if evicted from cache, update the table and write to disk when dirty
@@ -262,7 +263,8 @@ func (b *BufferPool) getFrame() (*FrameID, error) {
 				page.isDirty = false
 				if err := b.disk.WritePage(page); err != nil {
 					page.isDirty = true
-					return nil, err
+
+					return newFrameHelper(b, frameID, nil, err, true)
 				}
 			}
 
@@ -270,5 +272,36 @@ func (b *BufferPool) getFrame() (*FrameID, error) {
 		}
 	}
 
-	return frameID, nil
+	return newFrameHelper(b, frameID, nil, nil, true)
+}
+
+// FrameHelper helps on
+type FrameHelper struct {
+	bufferPool *BufferPool
+	frameID    *FrameID
+	page       *Page
+	err        error
+	isEvicted  bool
+}
+
+func newFrameHelper(b *BufferPool, frameID *FrameID, page *Page, err error, isEvicted bool) FrameHelper {
+	fh := FrameHelper{b, frameID, page, err, isEvicted}
+	fh.rollBackOnErr()
+	return fh
+}
+
+func (f *FrameHelper) rollBackOnErr() {
+	if f.err != nil && f.isEvicted {
+		f.bufferPool.eviction.Add(*f.frameID)
+	}
+}
+
+func (f *FrameHelper) AllocatePage() {
+	f.page, f.err = f.bufferPool.disk.AllocatePage()
+	f.rollBackOnErr()
+}
+
+func (f *FrameHelper) ReadPage(id PageID) {
+	f.page, f.err = f.bufferPool.disk.ReadPage(id)
+	f.rollBackOnErr()
 }
