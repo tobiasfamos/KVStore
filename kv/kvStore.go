@@ -35,50 +35,12 @@ type KeyValueStore interface {
 	Close() error
 }
 
-type BPlusStore struct {
-	rootNode   InternalNode
-	bufferPool BufferPool
-}
-
-/*
-	Put first element
-	1. Look at root node and find ref to node we need to go.
-	2. If no ref is in Yet, create the first Leaf Node: Otherwise optain Leaf node from Butterpool
-	3. Insert the value into the leaf node.
-	4. Mark Leaf node as dirty in Bufferpool.
-	5. Return
-
-*/
-
-func (BPlusStore) Put(key uint64, value [10]byte) error {
-	// TODO Implement
-	return nil
-}
-func (BPlusStore) Get(key uint64) ([10]byte, error) {
-	// TODO Implement
-	return [10]byte{10, 10, 1}, nil
-}
-func (store *BPlusStore) Create(config KvStoreConfig) error {
-	//TODo Replace with better value
-	localBufferPool := NewBufferPool()
-	store.bufferPool = localBufferPool
-
-	return nil
-
-}
-func (BPlusStore) Open(path string) error {
-	// TODO Implement
-	return nil
-
-}
-func (BPlusStore) Delete() error {
-	// TODO Implement
-	return nil
-
-}
-func (BPlusStore) Close() error {
-	// TODO Implement
-	return nil
+func NewBPlusStore() *BPlusStore {
+	store := BPlusStore{
+		rootNode:   InternalNode{},
+		bufferPool: BufferPool{},
+	}
+	return &store
 }
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
@@ -124,5 +86,4 @@ func (KvStoreStub) Delete() error {
 }
 func (KvStoreStub) Close() error {
 	return nil
-
 }

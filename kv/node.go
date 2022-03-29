@@ -214,7 +214,7 @@ func (n *LeafNode) get(key uint64) ([10]byte, bool) {
 			return n.values[i], true
 		}
 	}
-	return [10]byte{}, false
+	return [10]byte{2}, false
 }
 
 /*
