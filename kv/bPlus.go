@@ -25,7 +25,7 @@ func (BPlusStore) Put(key uint64, value [10]byte) error {
 }
 func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 	firstChildId, _ := findPointerByKey(store.rootNode, key)
-	nextPage := store.bufferPool.FetchPage(PageID(firstChildId))
+	nextPage, _ := store.bufferPool.FetchPage(PageID(firstChildId))
 	nextPageNode := decodeLeafNode(nextPage.data[:])
 	value, wasFound := nextPageNode.get(key)
 	if !wasFound {
@@ -35,7 +35,9 @@ func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 }
 func (store *BPlusStore) Create(config KvStoreConfig) error {
 	//TODo Replace with better value
-	localBufferPool := NewBufferPool()
+	newCacheEviciton := NewLRUCache(12)
+	newRamDisk := NewRAMDisk(120000, 12)
+	localBufferPool := NewBufferPool(12, newRamDisk, &newCacheEviciton)
 	store.bufferPool = localBufferPool
 
 	return nil
@@ -59,7 +61,7 @@ func (BPlusStore) Close() error {
 // Search the partition Keys of an Internal Node to find the next Node.
 // Traverse all Partition keys. As soon as a partition Key is bigger than the key to find,
 // return the "previous" page ID"
-func findPointerByKey(node InternalNode, key uint64) (uint32, error) {
+func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
 	for index, currentKey := range node.keys {
 		if currentKey > key {
 			if index > 0 {

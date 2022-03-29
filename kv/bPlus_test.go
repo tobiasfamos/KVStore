@@ -14,28 +14,9 @@ func TestInitialize(t *testing.T) {
 	fmt.Print(store)
 }
 
-func TestPutFirstElement(t *testing.T) {
-	store := emptyStore()
-	store.rootNode.keys[0] = 0
-	store.rootNode.keys[1] = 10
-	store.rootNode.keys[2] = 20
-	store.rootNode.keys[3] = 30
-
-	store.rootNode.pages[0] = 0
-	store.rootNode.pages[1] = 1
-	store.rootNode.pages[2] = 2
-	store.rootNode.pages[3] = 3
-	store.rootNode.pages[4] = 4
-
-	err := store.Put(12, [10]byte{10, 10, 1})
-	if err != nil {
-		t.Errorf("Could not Put")
-	}
-}
-
 func TestGetAnElement(t *testing.T) {
-	store := emptyStore()
-	value, err := store.Get(12)
+	store := generateStoreWithOneElement()
+	value, err := store.Get(1)
 	if err != nil {
 		t.Errorf("Could not Get")
 	}
@@ -53,7 +34,7 @@ func generateStoreWithOneElement() *BPlusStore {
 		values:  [227][10]byte{{2}},
 		numKeys: 1,
 	}
-	newPage := store.bufferPool.NewPage()
+	newPage, _ := store.bufferPool.NewPage()
 	var newData = [PageDataSize]byte{}
 	copy(newData[:], dummyNode.encode())
 
@@ -64,7 +45,7 @@ func generateStoreWithOneElement() *BPlusStore {
 	store.bufferPool.FlushAllPages()
 
 	store.rootNode.keys[0] = ^uint64(0)
-	store.rootNode.pages[0] = uint32(newPage.id)
+	store.rootNode.pages[0] = newPage.id
 
 	return store
 

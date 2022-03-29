@@ -36,9 +36,12 @@ type KeyValueStore interface {
 }
 
 func NewBPlusStore() *BPlusStore {
+	//TODO Remove
+	newCacheEviciton := NewLRUCache(12)
+	newRamDisk := NewRAMDisk(120000, 12)
 	store := BPlusStore{
 		rootNode:   InternalNode{},
-		bufferPool: BufferPool{},
+		bufferPool: NewBufferPool(12, newRamDisk, &newCacheEviciton),
 	}
 	return &store
 }
