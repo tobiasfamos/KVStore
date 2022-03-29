@@ -32,23 +32,26 @@ Solving with page size <S> for <n> we get:
 For a page size of 4096 we get <n> = 227
 */
 
-// NodeDataStartIndex is the starting index for the actual node information for both InternalNode and LeafNode.
-const NodeDataStartIndex = 8
+// KeyStartIndex is the starting index for keys for both InternalNode and LeafNode.
+const KeyStartIndex = 2
 
 // NumInternalKeys is the number of keys an InternalNode may hold at any given time.
-const NumInternalKeys = (PageSize - NodeDataStartIndex - KeyStartIndex - 4) / 12
+const NumInternalKeys = (PageSize - PageMetadataSize - KeyStartIndex - 4) / 12
+
+// NumInternalPages is the number of pages an InternalNode may hold at any given time.
+const NumInternalPages = NumInternalKeys + 1
 
 // InternalNodeSize is the size in bytes that an InternalNode uses.
 const InternalNodeSize = KeyStartIndex + 4 + 12*NumInternalKeys
 
 // NumLeafKeys is the number of keys a LeafNode may hold at any given time.
-const NumLeafKeys = (PageSize - NodeDataStartIndex - KeyStartIndex) / 18
+const NumLeafKeys = (PageSize - PageMetadataSize - KeyStartIndex) / 18
+
+// NumLeafValues is the number of values a LeafNode may hold at any given time.
+const NumLeafValues = NumLeafKeys
 
 // LeafNodeSize is the size in bytes that a LeafNode uses.
 const LeafNodeSize = KeyStartIndex + 18*NumLeafKeys
-
-// KeyStartIndex is the starting index for keys for both InternalNode and LeafNode.
-const KeyStartIndex = 2
 
 // PagesStartIndex is the starting index for the page IDs in InternalNode.
 const PagesStartIndex = KeyStartIndex + NumInternalKeys*8
@@ -66,7 +69,7 @@ An InternalNode takes at most InternalNodeSize bytes in memory.
 */
 type InternalNode struct {
 	keys    [NumInternalKeys]uint64
-	pages   [NumInternalKeys + 1]uint32
+	pages   [NumInternalPages]PageID
 	numKeys uint16
 }
 
@@ -79,7 +82,7 @@ A LeafNode takes at most LeafNodeSize bytes in memory.
 */
 type LeafNode struct {
 	keys    [NumLeafKeys]uint64
-	values  [NumLeafKeys][10]byte
+	values  [NumLeafValues][10]byte
 	numKeys uint16
 }
 
@@ -99,7 +102,7 @@ func decodeInternalNode(slice []byte) InternalNode {
 	for i := 0; i < NumInternalKeys+1; i++ {
 		var from = PagesStartIndex + i*4
 		var to = from + 4
-		node.pages[i] = binary.BigEndian.Uint32(slice[from:to])
+		node.pages[i] = PageID(binary.BigEndian.Uint32(slice[from:to]))
 	}
 
 	return node
@@ -119,7 +122,7 @@ func (n *InternalNode) encode() []byte {
 	for i := 0; i < NumInternalKeys+1; i++ {
 		var from = PagesStartIndex + i*4
 		var to = from + 4
-		binary.BigEndian.PutUint32(page[from:to], n.pages[i])
+		binary.BigEndian.PutUint32(page[from:to], uint32(n.pages[i]))
 	}
 
 	return page
@@ -173,7 +176,7 @@ func (n *InternalNode) isFull() bool {
 }
 
 // getPage() returns the page id associated with the given key
-func (n *InternalNode) getPage(key uint64) uint32 {
+func (n *InternalNode) getPage(key uint64) PageID {
 	if n.numKeys == 0 {
 		panic("InternalNode should not be empty")
 	}
