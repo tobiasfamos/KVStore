@@ -42,7 +42,7 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 		copy(leftLeafNode.values[:], leftSideValues)
 		leftLeafNode.numKeys = uint16(len(leftSideKeys))
 
-		separationKey := uint64((rightLeafNode.keys[0] + leftLeafNode.keys[middle-1]) / 2)
+		separationKey := uint64(rightLeafNode.keys[0])
 		fmt.Print(separationKey)
 		if store.rootNode.numKeys == 0 {
 			store.rootNode.keys[0] = separationKey
@@ -182,7 +182,7 @@ func createNewPageForLeaf(node *LeafNode, pool *BufferPool) (PageID, error) {
 	if err != nil {
 		return 42, err
 	}
-	copy(newPage.data[:], new(LeafNode).encode())
+	copy(newPage.data[:], node.encode())
 	newPage.isLeaf = true
 	err = pool.UnpinPage(newPage.id, true)
 	return newPage.id, nil
