@@ -66,7 +66,7 @@ An InternalNode takes at most InternalNodeSize bytes in memory.
 */
 type InternalNode struct {
 	keys    [NumInternalKeys]uint64
-	pages   [NumInternalKeys + 1]uint32
+	pages   [NumInternalKeys + 1]PageID
 	numKeys uint16
 }
 
@@ -99,7 +99,7 @@ func decodeInternalNode(slice []byte) InternalNode {
 	for i := 0; i < NumInternalKeys+1; i++ {
 		var from = PagesStartIndex + i*4
 		var to = from + 4
-		node.pages[i] = binary.BigEndian.Uint32(slice[from:to])
+		node.pages[i] = PageID(binary.BigEndian.Uint32(slice[from:to]))
 	}
 
 	return node
@@ -119,7 +119,7 @@ func (n *InternalNode) encode() []byte {
 	for i := 0; i < NumInternalKeys+1; i++ {
 		var from = PagesStartIndex + i*4
 		var to = from + 4
-		binary.BigEndian.PutUint32(page[from:to], n.pages[i])
+		binary.BigEndian.PutUint32(page[from:to], uint32(n.pages[i]))
 	}
 
 	return page
@@ -173,7 +173,7 @@ func (n *InternalNode) isFull() bool {
 }
 
 // getPage() returns the page id associated with the given key
-func (n *InternalNode) getPage(key uint64) uint32 {
+func (n *InternalNode) getPage(key uint64) PageID {
 	if n.numKeys == 0 {
 		panic("InternalNode should not be empty")
 	}
