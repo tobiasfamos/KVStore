@@ -23,12 +23,16 @@ type BufferPool struct {
 NewBufferPool creates a new buffer pool with a given size (number of pages).
 */
 func NewBufferPool(size uint, disk Disk, eviction CacheEviction) BufferPool {
+	freeFrames := make([]FrameID, size)
+	for i := range freeFrames {
+		freeFrames[i] = FrameID(i)
+	}
 	return BufferPool{
 		disk:       disk,
 		pages:      make([]*Page, size),
 		pageLookup: make(map[PageID]FrameID, size),
 		eviction:   eviction,
-		freeFrames: make([]FrameID, size),
+		freeFrames: freeFrames,
 	}
 }
 
