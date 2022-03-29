@@ -82,10 +82,10 @@ func TestGetAndPut(t *testing.T) {
 	}
 }
 
-func TestForceLeafNodeSplit(t *testing.T) {
+func TestForceLeafNodeSplitOnce(t *testing.T) {
 	// Test inserting many elements to force a node split
 	kv, _ := helper.GetEmptyInstance()
-	for i := 0; i < 700; i += 1 {
+	for i := 0; i < 250; i += 1 {
 		a := [10]byte{}
 		binary.LittleEndian.PutUint32(a[:], uint32(i))
 		err := kv.Put(uint64(i), a)
@@ -100,10 +100,10 @@ func TestForceLeafNodeSplit(t *testing.T) {
 		{0},
 		{12},
 		{33},
-		{253},
-		{309},
-		{466},
-		{600},
+		{111},
+		{112},
+		{113},
+		{114},
 	}
 
 	// Now read them and ensure they are as expected

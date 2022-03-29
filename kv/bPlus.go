@@ -2,6 +2,7 @@ package kv
 
 import (
 	"errors"
+	"fmt"
 )
 
 type BPlusStore struct {
@@ -25,13 +26,49 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 		return err
 	}
 	leafNode := decodeLeafNode(leafPage.data[:])
-	_, wasFound := leafNode.get(key)
-	if wasFound {
-		return errors.New("Key already exists")
+	if leafNode.isFull() {
+		middle := int(len(leafNode.values) / 2)
+		leftSideKeys := leafNode.keys[:middle]
+		rightSideKeys := leafNode.keys[middle:]
+		leftSideValues := leafNode.values[:middle]
+		rightSideValues := leafNode.values[middle:]
+		rightLeafNode := new(LeafNode)
+		copy(rightLeafNode.keys[:], rightSideKeys)
+		copy(rightLeafNode.values[:], rightSideValues)
+		rightLeafNode.numKeys = uint16(len(rightSideKeys))
+
+		leftLeafNode := new(LeafNode)
+		copy(leftLeafNode.keys[:], leftSideKeys)
+		copy(leftLeafNode.values[:], leftSideValues)
+		leftLeafNode.numKeys = uint16(len(leftSideKeys))
+
+		separationKey := uint64((rightLeafNode.keys[0] + leftLeafNode.keys[middle-1]) / 2)
+		fmt.Print(separationKey)
+		if store.rootNode.numKeys == 0 {
+			store.rootNode.keys[0] = separationKey
+			store.rootNode.numKeys += 1
+			leftPageId, err := createNewPageForLeaf(*leftLeafNode, store.bufferPool)
+			if err != nil {
+				return err
+			}
+			rightPageId, err := createNewPageForLeaf(*rightLeafNode, store.bufferPool)
+			if err != nil {
+				return err
+			}
+			store.rootNode.pages[0] = leftPageId
+			store.rootNode.pages[1] = rightPageId
+			return nil
+		}
+		return nil
+	} else {
+		_, wasFound := leafNode.get(key)
+		if wasFound {
+			return errors.New("Key already exists")
+		}
+		leafNode.insert(key, value)
+		writeLeafToPageAndUnpin(leafPage, &leafNode, &store.bufferPool)
+		return nil
 	}
-	leafNode.insert(key, value)
-	writeLeafToPageAndUnpin(leafPage, &leafNode, &store.bufferPool)
-	return nil
 }
 func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 	leafPage, err := findLeafPageForKey(store.rootNode, key, store.bufferPool)
@@ -90,7 +127,7 @@ func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
 		return node.pages[0], nil
 	}
 	for index, currentKey := range node.keys {
-		if currentKey > key {
+		if currentKey > key || index >= int(node.numKeys) {
 			if index > 0 {
 				return node.pages[index], nil
 			} else {
@@ -138,4 +175,16 @@ func writeLeafToPageAndUnpin(page *Page, leafNode *LeafNode, bufferPool *BufferP
 		return err
 	}
 	return nil
+}
+
+func createNewPageForLeaf(node LeafNode, pool BufferPool) (PageID, error) {
+	newPage, err := pool.NewPage()
+	if err != nil {
+		return 42, err
+	}
+	copy(newPage.data[:], new(LeafNode).encode())
+	newPage.isLeaf = true
+	err = pool.UnpinPage(newPage.id, true)
+	_ = pool.FlushAllPages()
+	return newPage.id, nil
 }
