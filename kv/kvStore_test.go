@@ -1,6 +1,7 @@
 package kv
 
 import (
+	"encoding/binary"
 	"errors"
 	"io/ioutil"
 	"os"
@@ -81,8 +82,49 @@ func TestGetAndPut(t *testing.T) {
 	}
 }
 
+func TestForceLeafNodeSplit(t *testing.T) {
+	// Test inserting many elements to force a node split
+	kv, _ := helper.GetEmptyInstance()
+	for i := 0; i < 700; i += 1 {
+		a := [10]byte{}
+		binary.LittleEndian.PutUint32(a[:], uint32(i))
+		err := kv.Put(uint64(i), a)
+		if err != nil {
+			t.Errorf("Expected no error when putting elemnts; Got %v", err)
+		}
+	}
+
+	tests := []struct {
+		key uint64
+	}{
+		{0},
+		{12},
+		{33},
+		{253},
+		{309},
+		{466},
+		{600},
+	}
+
+	// Now read them and ensure they are as expected
+	for _, test := range tests {
+		val, err := kv.Get(test.key)
+		if err != nil {
+			t.Errorf("Error getting element %d: %v", test.key, err)
+		}
+		convertedVal := binary.LittleEndian.Uint64(val[:])
+		if convertedVal != test.key {
+			t.Errorf(
+				"Got unexpected value %d for key %d; expected %d",
+				val,
+				test.key,
+				test.key,
+			)
+		}
+	}
+}
+
 func TestPutExistingElement(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	kv, _ := helper.GetEmptyInstance()
 
 	err := kv.Put(1, [10]byte{})
@@ -97,7 +139,6 @@ func TestPutExistingElement(t *testing.T) {
 }
 
 func TestGetNonexistantElement(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	kv, _ := helper.GetEmptyInstance()
 
 	_, err := kv.Get(1)
@@ -141,7 +182,6 @@ func TestGetPutExceedingMemory(t *testing.T) {
 }
 
 func TestCreate(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	kv := KvStoreStub{}
 
 	dir, err := ioutil.TempDir(helper.WorkingDirectory, "kv_store_")
