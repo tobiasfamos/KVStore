@@ -14,7 +14,7 @@ type RAMDisk struct {
 	pages          map[PageID]*Page
 }
 
-func NewRAMDisk(initialSize uint, maxPagesOnDisk uint32) Disk {
+func NewRAMDisk(initialSize uint32, maxPagesOnDisk uint32) Disk {
 	return &RAMDisk{
 		maxPagesOnDisk: maxPagesOnDisk,
 		nextPageID:     0,
@@ -63,4 +63,12 @@ func (r *RAMDisk) WritePage(page *Page) error {
 	r.pages[page.id] = page
 
 	return nil
+}
+
+func (r *RAMDisk) Occupied() uint32 {
+	return uint32(len(r.pages))
+}
+
+func (r *RAMDisk) Capacity() uint32 {
+	return r.maxPagesOnDisk
 }
