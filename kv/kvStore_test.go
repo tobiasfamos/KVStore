@@ -82,6 +82,32 @@ func TestGetAndPut(t *testing.T) {
 	}
 }
 
+func TestBufferPoolNewPage(t *testing.T) {
+	memorySize := 4096 * 10
+	numberOfPages := memorySize / PageSize
+	newCacheEviction := NewLRUCache(12)
+	newRamDisk := NewRAMDisk(uint32(memorySize), 12)
+	localBufferPool := NewBufferPool(uint(numberOfPages), newRamDisk, &newCacheEviction)
+
+	page1, _ := localBufferPool.NewPage()
+	localBufferPool.UnpinPage(page1.id, true)
+	page2, _ := localBufferPool.NewPage()
+	localBufferPool.UnpinPage(page2.id, true)
+	page3, _ := localBufferPool.NewPage()
+	localBufferPool.UnpinPage(page3.id, true)
+
+	page1Fetch, _ := localBufferPool.FetchPage(page1.id)
+	page2Fetch, _ := localBufferPool.FetchPage(page2.id)
+	page3Fetch, _ := localBufferPool.FetchPage(page3.id)
+	if page1Fetch.id == page2Fetch.id {
+		t.Errorf("Same Ids, expected different")
+	}
+	if page3Fetch.id == page2Fetch.id {
+		t.Errorf("Same IDs, expected differen")
+	}
+
+}
+
 func TestForceLeafNodeSplitOnce(t *testing.T) {
 	// Test inserting many elements to force a node split
 	kv, _ := helper.GetEmptyInstance()
@@ -104,6 +130,56 @@ func TestForceLeafNodeSplitOnce(t *testing.T) {
 		{112},
 		{113},
 		{114},
+	}
+
+	// Now read them and ensure they are as expected
+	for _, test := range tests {
+		val, err := kv.Get(test.key)
+		if err != nil {
+			t.Errorf("Error getting element %d: %v", test.key, err)
+		}
+		convertedVal := binary.LittleEndian.Uint64(val[:])
+		if convertedVal != test.key {
+			t.Errorf(
+				"Got unexpected value %d for key %d; expected %d",
+				val,
+				test.key,
+				test.key,
+			)
+		}
+	}
+}
+
+func TestForceLeafNodeSplitFourTimes(t *testing.T) {
+	// Test inserting many elements to force a node split
+	kv, _ := helper.GetEmptyInstance()
+	for i := 0; i < 500; i += 1 {
+		a := [10]byte{}
+		binary.LittleEndian.PutUint32(a[:], uint32(i))
+		err := kv.Put(uint64(i), a)
+		if err != nil {
+			t.Errorf("Expected no error when putting elemnts; Got %v", err)
+		}
+	}
+
+	tests := []struct {
+		key uint64
+	}{
+		{0},
+		{12},
+		{33},
+		{111},
+		{112},
+		{113},
+		{223},
+		{224},
+		{225},
+		{335},
+		{336},
+		{337},
+		{447},
+		{448},
+		{449},
 	}
 
 	// Now read them and ensure they are as expected
