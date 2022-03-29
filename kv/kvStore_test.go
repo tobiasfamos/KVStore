@@ -20,7 +20,6 @@ func TestMain(m *testing.M) {
 }
 
 func TestIntfSize(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	tests := []struct {
 		size       int
 		expectFail bool
@@ -43,7 +42,6 @@ func TestIntfSize(t *testing.T) {
 }
 
 func TestGetAndPut(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	// Happy-case Get() and Put() will be tested together, as there's
 	// really no way to do one without the other.
 	kv, _ := helper.GetEmptyInstance()

@@ -36,12 +36,9 @@ type KeyValueStore interface {
 }
 
 func NewBPlusStore() *BPlusStore {
-	//TODO Remove
-	newCacheEviciton := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(120000, 12)
 	store := BPlusStore{
 		rootNode:   InternalNode{},
-		bufferPool: NewBufferPool(12, newRamDisk, &newCacheEviciton),
+		bufferPool: BufferPool{},
 	}
 	return &store
 }
@@ -52,7 +49,7 @@ type KvStoreConfig struct {
 	workingDirectory string // Directory on disk in which KV store will be persisted
 }
 
-func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
+func NewKvStoreInstance(size int, path string) (KeyValueStore, error) {
 	if size > MaxMem || size < 0 {
 		return nil, fmt.Errorf("'size' must be between 0 and %d", MaxMem)
 	}
@@ -71,22 +68,22 @@ func (KvStoreStub) Put(key uint64, value [10]byte) error {
 	return nil
 }
 
-func (KvStoreStub) Get(a1 uint64) ([10]byte, error) {
+func (*KvStoreStub) Get(a1 uint64) ([10]byte, error) {
 	return [10]byte{10, 10, 1}, nil
 }
 
-func (KvStoreStub) Open(path string) error {
+func (*KvStoreStub) Open(path string) error {
 	return nil
 }
 
-func (KvStoreStub) Create(config KvStoreConfig) error {
+func (*KvStoreStub) Create(config KvStoreConfig) error {
 	return nil
 }
 
-func (KvStoreStub) Delete() error {
+func (*KvStoreStub) Delete() error {
 	return nil
 
 }
-func (KvStoreStub) Close() error {
+func (*KvStoreStub) Close() error {
 	return nil
 }

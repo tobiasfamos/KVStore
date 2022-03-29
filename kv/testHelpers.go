@@ -46,7 +46,7 @@ func (helper *TestHelper) GetEmptyInstance() (KeyValueStore, string) {
 // GetEmptyInstanceWithMemoryLimit provides a new ready-to-use KV store with a
 // custom memory limit. It also returns the working directory of the KV store.
 func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit uint) (KeyValueStore, string) {
-	kv := KvStoreStub{}
+	kv := BPlusStore{}
 
 	dir, err := ioutil.TempDir(helper.WorkingDirectory, "kv_store_")
 	if err != nil {
@@ -63,5 +63,5 @@ func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit uint) (Key
 		log.Fatalf("Unable to initialize KV store: %v", err)
 	}
 
-	return kv, dir
+	return &kv, dir
 }

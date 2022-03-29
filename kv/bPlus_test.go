@@ -39,7 +39,6 @@ func generateStoreWithOneElement() *BPlusStore {
 	copy(newData[:], dummyNode.encode())
 
 	newPage.data = newData
-	newPage.isDirty = true
 	newPage.isLeaf = true
 	store.bufferPool.UnpinPage(newPage.id, true)
 	store.bufferPool.FlushAllPages()

@@ -19,41 +19,65 @@ type BPlusStore struct {
 
 */
 
-func (BPlusStore) Put(key uint64, value [10]byte) error {
-
+func (store *BPlusStore) Put(key uint64, value [10]byte) error {
+	leafPage, err := findLeafPageForKey(store.rootNode, key, store.bufferPool)
+	if err != nil {
+		return err
+	}
+	leafNode := decodeLeafNode(leafPage.data[:])
+	_, wasFound := leafNode.get(key)
+	if wasFound {
+		return errors.New("Key already exists")
+	}
+	leafNode.insert(key, value)
+	writeLeafToPageAndUnpin(leafPage, &leafNode, &store.bufferPool)
 	return nil
 }
 func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
-	firstChildId, _ := findPointerByKey(store.rootNode, key)
-	nextPage, _ := store.bufferPool.FetchPage(PageID(firstChildId))
-	nextPageNode := decodeLeafNode(nextPage.data[:])
-	value, wasFound := nextPageNode.get(key)
+	leafPage, err := findLeafPageForKey(store.rootNode, key, store.bufferPool)
+	if err != nil {
+		return [10]byte{}, err
+	}
+	leafNode := decodeLeafNode(leafPage.data[:])
+	value, wasFound := leafNode.get(key)
 	if !wasFound {
 		return [10]byte{0}, errors.New("Could Not find Element")
 	}
 	return value, nil
 }
+
 func (store *BPlusStore) Create(config KvStoreConfig) error {
 	//TODo Replace with better value
-	newCacheEviciton := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(120000, 12)
-	localBufferPool := NewBufferPool(12, newRamDisk, &newCacheEviciton)
+	numberOfPages := config.memorySize / PageSize
+	newCacheEviction := NewLRUCache(12)
+	newRamDisk := NewRAMDisk(uint32(config.memorySize), 12)
+	localBufferPool := NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
 	store.bufferPool = localBufferPool
-
+	newPage, err := store.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+	copy(newPage.data[:], new(LeafNode).encode())
+	newPage.isLeaf = true
+	store.rootNode.pages[0] = newPage.id
+	err = store.bufferPool.UnpinPage(newPage.id, true)
+	if err != nil {
+		return err
+	}
 	return nil
 
 }
-func (BPlusStore) Open(path string) error {
+func (store *BPlusStore) Open(path string) error {
 	// TODO Implement
 	return nil
 
 }
-func (BPlusStore) Delete() error {
+func (store *BPlusStore) Delete() error {
 	// TODO Implement
 	return nil
 
 }
-func (BPlusStore) Close() error {
+func (store *BPlusStore) Close() error {
 	// TODO Implement
 	return nil
 }
@@ -62,6 +86,9 @@ func (BPlusStore) Close() error {
 // Traverse all Partition keys. As soon as a partition Key is bigger than the key to find,
 // return the "previous" page ID"
 func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
+	if node.numKeys == 0 {
+		return node.pages[0], nil
+	}
 	for index, currentKey := range node.keys {
 		if currentKey > key {
 			if index > 0 {
@@ -72,4 +99,43 @@ func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
 		}
 	}
 	return 0, errors.New("could nod find Node")
+}
+
+func findNextPageByKey(node InternalNode, key uint64, pool BufferPool) (*Page, error) {
+	nextNodeID, err := findPointerByKey(node, key)
+	if err != nil {
+		return nil, err
+	}
+	nextPage, err := pool.FetchPage(nextNodeID)
+	if err != nil {
+		return nil, err
+	}
+	return nextPage, nil
+}
+
+func findLeafPageForKey(rootNode InternalNode, key uint64, pool BufferPool) (*Page, error) {
+	var currentPage *Page
+	currentNode := rootNode
+	for true {
+		var err error
+		currentPage, err = findNextPageByKey(currentNode, key, pool)
+		if err != nil {
+			return nil, err
+		}
+		if currentPage.isLeaf {
+			break
+		}
+		currentNode = decodeInternalNode(currentPage.data[:])
+	}
+	return currentPage, nil
+
+}
+
+func writeLeafToPageAndUnpin(page *Page, leafNode *LeafNode, bufferPool *BufferPool) error {
+	copy(page.data[:], leafNode.encode())
+	err := bufferPool.UnpinPage(page.id, true)
+	if err != nil {
+		return err
+	}
+	return nil
 }
