@@ -1,336 +1,268 @@
 package kv
 
 import (
-	"encoding/binary"
-	"math"
+	"bytes"
 	"testing"
 )
 
-const testNumKeys = 2
-const testFirstKey = 1
-const testSecondKey = 2
-const testThirdKey = 3
-const testFirstPageID = 1
-const testSecondPageID = 2
-const testThirdPageID = 3
+const (
+	testNumKeys = 2
 
-var testFirstValue = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 10}
-var testSecondValue = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 20}
-var testThirdValue = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 30}
+	testFirstKey  = 1
+	testSecondKey = 2
+	testThirdKey  = 3
 
-func exampleInternalNodePage() [PageSize]byte {
-	var page = [PageSize]byte{
-		0b0, 0b0, 0b0, 0b0, // page ID
-		0b0,              // bitflag
-		0b0, testNumKeys, // numKeys (2 bytes)
-		0b0, 0b0, 0b0, 0b0, 0b0, 0b0, 0b0, testFirstKey, // first key (8 bytes)
-		0b0, 0b0, 0b0, 0b0, 0b0, 0b0, 0b0, testSecondKey, // second key (8 bytes)
-	}
-	var i = NodeDataStartIndex + PagesStartIndex + 3 // first page ID (last byte of uint32)
-	page[i] = testFirstPageID
-	page[i+4] = testSecondPageID
-	page[i+8] = testThirdPageID
+	testFirstPageID  = PageID(1)
+	testSecondPageID = PageID(2)
+	testThirdPageID  = PageID(3)
+)
 
-	return page
+var (
+	testKeys    = []uint64{testFirstKey, testSecondKey, testThirdKey}
+	testPageIDs = []PageID{testFirstPageID, testSecondPageID, testThirdPageID}
+
+	testFirstValue  = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 10}
+	testSecondValue = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 20}
+	testThirdValue  = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 30}
+	testValues      = [][10]byte{testFirstValue, testSecondValue, testThirdValue}
+)
+
+type testNodes struct {
+	page         Page
+	InternalNode *InternalNode
+	leafNode     *LeafNode
+	isEmpty      bool
+	isFull       bool
 }
 
-func fakeFullInternalNodePage() [PageSize]byte {
-	var page = [PageSize]byte{
-		0b0, 0b0, 0b0, 0b0, // page ID
-		0b0,                          // bitflag
-		math.MaxUint8, math.MaxUint8, // numKeys FULL (2 bytes)
+func testInternalNode() ([PageDataSize]byte, InternalNode) {
+	internalData := [PageDataSize]byte{
+		0, testNumKeys, // numKeys (2 bytes)
+		0, 0, 0, 0, 0, 0, 0, testFirstKey, // first key (8 bytes)
+		0, 0, 0, 0, 0, 0, 0, testSecondKey, // second key (8 bytes)
 	}
-	binary.BigEndian.PutUint16(page[NodeDataStartIndex:NodeDataStartIndex+2], NumInternalKeys)
 
-	return page
+	copy(internalData[PagesStartIndex:], []byte{
+		0, 0, 0, byte(testFirstPageID), // first page ID
+		0, 0, 0, byte(testSecondPageID),
+		0, 0, 0, byte(testThirdPageID),
+	})
+	internalNode := InternalNode{
+		keys:    [NumInternalKeys]uint64{testFirstKey, testSecondKey},
+		pages:   [NumInternalPages]PageID{testFirstPageID, testSecondPageID, testThirdPageID},
+		numKeys: testNumKeys,
+	}
+	return internalData, internalNode
 }
 
-func exampleLeafNodePage() [PageSize]byte {
-	var page = [PageSize]byte{
-		0b0, 0b0, 0b0, 0b0, // page ID
-		0b1,              // bitflag
-		0b0, testNumKeys, // numKeys (2 bytes)
-		0b0, 0b0, 0b0, 0b0, 0b0, 0b0, 0b0, testFirstKey, // first key (8 bytes)
-		0b0, 0b0, 0b0, 0b0, 0b0, 0b0, 0b0, testSecondKey, // second key (8 bytes)
+func testLeafNode() ([PageDataSize]byte, LeafNode) {
+	leafData := [PageDataSize]byte{
+		0, testNumKeys, // numKeys (2 bytes)
+		0, 0, 0, 0, 0, 0, 0, testFirstKey, // first key (8 bytes)
+		0, 0, 0, 0, 0, 0, 0, testSecondKey, // second key (8 bytes)
 	}
-	var i = NodeDataStartIndex + ValuesStartIndex // first value ([10]byte)
-	copy(page[i:i+10], testFirstValue[:])
-	i += 10
-	copy(page[i:i+10], testSecondValue[:])
-
-	return page
+	copy(leafData[ValuesStartIndex:], append(testFirstValue[:], testSecondValue[:]...))
+	leafNode := LeafNode{
+		keys:    [NumLeafKeys]uint64{testFirstKey, testSecondKey},
+		values:  [NumLeafValues][10]byte{testFirstValue, testSecondValue},
+		numKeys: testNumKeys,
+	}
+	return leafData, leafNode
 }
 
-func fakeFullLeafNodePage() [PageSize]byte {
-	var page = [PageSize]byte{
-		0b0, 0b0, 0b0, 0b0, // page ID
-		0b1, // bitflag
-	}
-	binary.BigEndian.PutUint16(page[NodeDataStartIndex:NodeDataStartIndex+2], NumLeafKeys)
-
-	return page
-}
-
-// test empty InternalNode is not full
-func TestEmptyInternalNodeIsNotFull(t *testing.T) {
-	var nodeData = make([]byte, InternalNodeSize)
-	var node = decodeInternalNode(nodeData)
-
-	if node.isFull() {
-		t.Errorf("Actual isFull = %t, Expected == false", node.isFull())
-	}
-}
-
-// test InternalNode example is not full
-func TestInternalNodeExampleIsNotFull(t *testing.T) {
-	var page = exampleInternalNodePage()
-	var node = decodeInternalNode(page[NodeDataStartIndex:])
-
-	if node.isFull() {
-		t.Errorf("Actual isFull = %t, Expected == false", node.isFull())
+func exampleNodes() []testNodes {
+	iData, iNode := testInternalNode()
+	lData, lNode := testLeafNode()
+	return []testNodes{
+		{Page{}, &InternalNode{}, nil, true, false},
+		{Page{isLeaf: true}, nil, &LeafNode{}, true, false},
+		{Page{data: iData}, &iNode, nil, false, false},
+		{Page{isLeaf: true, data: lData}, nil, &lNode, false, false},
 	}
 }
 
-// test fake full InternalNode is full
-func TestFakeFullInternalNodeIsFull(t *testing.T) {
-	var page = fakeFullInternalNodePage()
-	var node = decodeInternalNode(page[NodeDataStartIndex:])
+func TestNode_IsFull(t *testing.T) {
+	nodes := exampleNodes()
 
-	if !node.isFull() {
-		t.Errorf("Actual isFull = %t, Expected == true", node.isFull())
-	}
-}
-
-// test decode empty InternalNode
-func TestDecodeEmptyInternalNode(t *testing.T) {
-	var nodeData = make([]byte, InternalNodeSize)
-	var node = decodeInternalNode(nodeData)
-
-	if node.numKeys != 0 {
-		t.Errorf("Actual numKeys = %d, Expected == 0", node.numKeys)
-	}
-}
-
-// test decode InternalNode example
-func TestDecodeInternalNodeExample(t *testing.T) {
-	var page = exampleInternalNodePage()
-	var node = decodeInternalNode(page[NodeDataStartIndex:])
-
-	if node.numKeys != testNumKeys {
-		t.Errorf("Actual numKeys = %d, Expected == %d", node.numKeys, testNumKeys)
-	}
-	if node.keys[0] != testFirstKey {
-		t.Errorf("Actual first key = %d, Expected == %d", node.keys[0], testFirstKey)
-	}
-	if node.keys[1] != testSecondKey {
-		t.Errorf("Actual second key = %d, Expected == %d", node.keys[1], testSecondKey)
-	}
-
-	var firstID = node.getPage(testFirstKey)
-	if firstID != testFirstPageID {
-		t.Errorf("Actual first page ID = %d, Expected == %d", firstID, testFirstPageID)
-	}
-	var secondID = node.getPage(testSecondKey)
-	if secondID != testSecondPageID {
-		t.Errorf("Actual second page ID = %d, Expected == %d", secondID, testSecondPageID)
-	}
-	var thirdID = node.getPage(testThirdKey)
-	if thirdID != testThirdPageID {
-		t.Errorf("Actual third page ID = %d, Expected == %d", thirdID, testThirdPageID)
-	}
-}
-
-// test empty InternalNode conversion (decode, encode, decode)
-func TestEmptyInternalNodeConversion(t *testing.T) {
-	var nodeData = make([]byte, InternalNodeSize)
-
-	var node = decodeInternalNode(nodeData)
-	var encoded = node.encode()
-	var node2 = decodeInternalNode(encoded)
-
-	if node != node2 {
-		t.Errorf("Both nodes should be the same")
-	}
-}
-
-// test InternalNode example conversion (decode, encode, decode)
-func TestInternalNodeExampleConversion(t *testing.T) {
-	var page = exampleInternalNodePage()
-
-	var node = decodeInternalNode(page[NodeDataStartIndex:])
-	var encoded = node.encode()
-	var node2 = decodeInternalNode(encoded)
-
-	if node != node2 {
-		t.Errorf("Both nodes should be the same")
-	}
-}
-
-// test LeafNode example is not full
-func TestLeafNodeExampleIsNotFull(t *testing.T) {
-	var page = exampleLeafNodePage()
-	var node = decodeLeafNode(page[NodeDataStartIndex:])
-
-	if node.isFull() {
-		t.Errorf("Actual isFull = %t, Expected == false", node.isFull())
-	}
-}
-
-// test fake full LeafNode is full
-func TestFakeFullLeafNodeIsFull(t *testing.T) {
-	var page = fakeFullLeafNodePage()
-	var node = decodeLeafNode(page[NodeDataStartIndex:])
-
-	if !node.isFull() {
-		t.Errorf("Actual isFull = %t, Expected == true", node.isFull())
-	}
-}
-
-// test decode empty LeafNode
-func TestDecodeEmptyLeafNode(t *testing.T) {
-	var nodeData = make([]byte, LeafNodeSize)
-	var node = decodeLeafNode(nodeData)
-
-	if node.numKeys != 0 {
-		t.Errorf("Actual numKeys = %d, Expected == 0", node.numKeys)
-	}
-}
-
-// test decode LeafNode example
-func TestDecodeLeafNodeExample(t *testing.T) {
-	var page = exampleLeafNodePage()
-	var node = decodeLeafNode(page[NodeDataStartIndex:])
-
-	if node.numKeys != testNumKeys {
-		t.Errorf("Actual numKeys = %d, Expected == %d", node.numKeys, testNumKeys)
-	}
-	if node.keys[0] != testFirstKey {
-		t.Errorf("Actual first key = %d, Expected == %d", node.keys[0], testFirstKey)
-	}
-	if node.keys[1] != testSecondKey {
-		t.Errorf("Actual first key = %d, Expected == %d", node.keys[0], testFirstKey)
-	}
-
-	if !node.contains(testFirstKey) {
-		t.Errorf("Actual contains first key = false, Expected == true")
-	}
-	if !node.contains(testSecondKey) {
-		t.Errorf("Actual contains second key = false, Expected == true")
-	}
-	if node.contains(testThirdKey) {
-		t.Errorf("Actual contains second key = true, Expected == false")
-	}
-
-	var firstValue, firstFound = node.get(testFirstKey)
-	if !firstFound {
-		t.Errorf("Actual firstFound = %t, Expected == true", firstFound)
-	}
-	if firstValue != testFirstValue {
-		t.Errorf("Actual first value = %v, Expected == %v", firstValue, testFirstValue)
-	}
-
-	var secondValue, secondFound = node.get(testSecondKey)
-	if !secondFound {
-		t.Errorf("Actual firstFound = %t, Expected == true", secondFound)
-	}
-	if secondValue != testSecondValue {
-		t.Errorf("Actual first value = %v, Expected == %v", secondValue, testSecondValue)
-	}
-}
-
-// test empty LeafNode conversion (decode, encode, decode)
-func TestEmptyLeafNodeConversion(t *testing.T) {
-	var nodeData = make([]byte, LeafNodeSize)
-
-	var node = decodeLeafNode(nodeData)
-	var encoded = node.encode()
-	var node2 = decodeLeafNode(encoded)
-
-	if node != node2 {
-		t.Errorf("Both nodes should be the same")
-	}
-}
-
-// test LeafNode example conversion (decode, encode, decode)
-func TestLeafNodeExampleConversion(t *testing.T) {
-	var page = exampleLeafNodePage()
-
-	var node = decodeLeafNode(page[NodeDataStartIndex:])
-	var encoded = node.encode()
-	var node2 = decodeLeafNode(encoded)
-
-	if node != node2 {
-		t.Errorf("Both nodes should be the same")
-	}
-}
-
-// test inserting 3 values to an empty leaf node
-func TestInsertToEmptyLeafNode(t *testing.T) {
-	var node LeafNode
-
-	// insert key 2 => [2]
-	{
-		node.insert(testSecondKey, testSecondValue)
-		if node.numKeys != 1 {
-			t.Errorf("Actual numKeys = %d, Expected == 1", node.numKeys)
-		}
-		if node.keys[0] != testSecondKey {
-			t.Errorf("Actual keys = [%d], Expected == [%d]", node.keys[0], testSecondKey)
-		}
-		if node.values[0] != testSecondValue {
-			t.Errorf("Actual values = %v, Expected == %v", node.values, testSecondValue)
-		}
-
-		var secondValue, secondFound = node.get(testSecondKey)
-		if !secondFound {
-			t.Errorf("Actual secondFound = %t, Expected == true", secondFound)
-		}
-		if secondValue != testSecondValue {
-			t.Errorf("Actual second value = %v, Expected == %v", secondValue, testSecondValue)
+	for _, node := range nodes {
+		if node.page.isLeaf {
+			lNode := decodeLeafNode(node.page.data[:])
+			if lNode.isFull() != node.isFull {
+				t.Errorf("Actual isFull = %t, Expected == %t", lNode.isFull(), node.isFull)
+			}
+		} else {
+			iNode := decodeInternalNode(node.page.data[:])
+			if iNode.isFull() != node.isFull {
+				t.Errorf("Actual isFull = %t, Expected == %t", iNode.isFull(), node.isFull)
+			}
 		}
 	}
+}
 
-	// insert key 1 => [1, 2]
-	{
-		node.insert(testFirstKey, testFirstValue)
-		if node.numKeys != 2 {
-			t.Errorf("Actual numKeys = %d, Expected == 2", node.numKeys)
-		}
-		if node.keys[0] != testFirstKey || node.keys[1] != testSecondKey {
-			t.Errorf("Actual keys = %v, Expected == %v", node.keys[0:2], []uint64{testFirstKey, testSecondKey})
-		}
-		if node.values[0] != testFirstValue || node.values[1] != testSecondValue {
-			t.Errorf("Actual values = %v, Expected == %v", node.values[0:2], [][10]byte{testFirstValue, testSecondValue})
-		}
+func TestNode_Decode(t *testing.T) {
+	nodes := exampleNodes()
 
-		var firstValue, firstFound = node.get(testFirstKey)
-		if !firstFound {
-			t.Errorf("Actual secondFound = %t, Expected == true", firstFound)
-		}
-		if firstValue != testFirstValue {
-			t.Errorf("Actual first value = %v, Expected == %v", firstValue, testFirstValue)
+	for _, node := range nodes {
+		if node.page.isLeaf {
+			lNode := decodeLeafNode(node.page.data[:])
+			if lNode != *node.leafNode {
+				t.Errorf("Decoding LeafNode fails")
+			}
+		} else {
+			iNode := decodeInternalNode(node.page.data[:])
+			if iNode != *node.InternalNode {
+				t.Errorf("Decoding InternalNode fails")
+			}
 		}
 	}
+}
 
-	// insert key 3 => [1, 2, 3]
-	{
-		node.insert(testThirdKey, testThirdValue)
-		if node.numKeys != 3 {
-			t.Errorf("Actual numKeys = %d, Expected == 3", node.numKeys)
+func TestNode_Encode(t *testing.T) {
+	nodes := exampleNodes()
+
+	for _, node := range nodes {
+		if node.page.isLeaf {
+			data := node.leafNode.encode()
+			if !bytes.Equal(data, node.page.data[:LeafNodeSize]) {
+				t.Errorf("Encoding LeafNode fails")
+			}
+		} else {
+			data := node.InternalNode.encode()
+			if !bytes.Equal(data, node.page.data[:InternalNodeSize]) {
+				t.Errorf("Encoding LeafNode fails")
+			}
 		}
-		if node.keys[0] != testFirstKey || node.keys[1] != testSecondKey || node.keys[2] != testThirdKey {
-			t.Errorf("Actual keys = %v, Expected == %v", node.keys[0:3], []uint64{testFirstKey, testSecondKey, testThirdKey})
-		}
-		if node.values[0] != testFirstValue || node.values[1] != testSecondValue || node.values[2] != testThirdValue {
-			t.Errorf("Actual values = %v, Expected == %v", node.values[0:3], [][10]byte{testFirstValue, testSecondValue, testThirdValue})
+	}
+}
+
+func TestInternalNode_GetPage(t *testing.T) {
+	nodes := exampleNodes()
+
+	for _, node := range nodes {
+		if node.isEmpty || node.page.isLeaf {
+			continue
 		}
 
-		var thirdValue, thirdFound = node.get(testThirdKey)
-		if !thirdFound {
-			t.Errorf("Actual thirdFound = %t, Expected == true", thirdFound)
+		for i := 0; i < testNumKeys; i++ {
+			pageID := node.InternalNode.getPage(testKeys[i])
+			if pageID != testPageIDs[i] {
+				t.Errorf("Actual pageID = %x, Expected = %x", pageID, testPageIDs[i])
+			}
+
+			iNode := decodeInternalNode(node.page.data[:])
+			pageID = iNode.getPage(testKeys[i])
+			if pageID != testPageIDs[i] {
+				t.Errorf("Actual pageID = %x, Expected = %x", pageID, testPageIDs[i])
+			}
 		}
-		if thirdValue != testThirdValue {
-			t.Errorf("Actual first value = %v, Expected == %v", thirdValue, testThirdValue)
+	}
+}
+
+func TestLeafNode_Get(t *testing.T) {
+	nodes := exampleNodes()
+
+	for _, node := range nodes {
+		if node.isEmpty || !node.page.isLeaf {
+			continue
+		}
+
+		for i := 0; i < testNumKeys; i++ {
+			value, found := node.leafNode.get(testKeys[i])
+			if !found {
+				t.Errorf("Actual found key = false, Expected == true")
+			}
+			if value != testValues[i] {
+				t.Errorf("Actual value = %x, Expected = %x", value, testValues[i])
+			}
+
+			lNode := decodeLeafNode(node.page.data[:])
+			value, found = lNode.get(testKeys[i])
+			if !found {
+				t.Errorf("Actual found key = false, Expected == true")
+			}
+			if value != testValues[i] {
+				t.Errorf("Actual value = %x, Expected = %x", value, testValues[i])
+			}
+		}
+	}
+}
+
+func TestLeafNode_Insert(t *testing.T) {
+	nodes := exampleNodes()
+
+	for _, node := range nodes {
+		if !node.isEmpty || !node.page.isLeaf {
+			continue
+		}
+		decoded := decodeLeafNode(node.page.data[:])
+
+		for _, lNode := range []*LeafNode{node.leafNode, &decoded} {
+			lNode.insert(testSecondKey, testSecondValue)
+			// insert key 2 => [2]
+			{
+				lNode.insert(testSecondKey, testSecondValue)
+				if lNode.numKeys != 1 {
+					t.Errorf("Actual numKeys = %d, Expected == 1", lNode.numKeys)
+				}
+				if lNode.keys[0] != testSecondKey {
+					t.Errorf("Actual keys = [%d], Expected == [%d]", lNode.keys[0], testSecondKey)
+				}
+				if lNode.values[0] != testSecondValue {
+					t.Errorf("Actual values = %v, Expected == %v", lNode.values, testSecondValue)
+				}
+
+				var secondValue, secondFound = lNode.get(testSecondKey)
+				if !secondFound {
+					t.Errorf("Actual secondFound = %t, Expected == true", secondFound)
+				}
+				if secondValue != testSecondValue {
+					t.Errorf("Actual second value = %v, Expected == %v", secondValue, testSecondValue)
+				}
+			}
+
+			// insert key 1 => [1, 2]
+			{
+				lNode.insert(testFirstKey, testFirstValue)
+				if lNode.numKeys != 2 {
+					t.Errorf("Actual numKeys = %d, Expected == 2", lNode.numKeys)
+				}
+				if lNode.keys[0] != testFirstKey || lNode.keys[1] != testSecondKey {
+					t.Errorf("Actual keys = %v, Expected == %v", lNode.keys[0:2], []uint64{testFirstKey, testSecondKey})
+				}
+				if lNode.values[0] != testFirstValue || lNode.values[1] != testSecondValue {
+					t.Errorf("Actual values = %v, Expected == %v", lNode.values[0:2], [][10]byte{testFirstValue, testSecondValue})
+				}
+
+				var firstValue, firstFound = lNode.get(testFirstKey)
+				if !firstFound {
+					t.Errorf("Actual secondFound = %t, Expected == true", firstFound)
+				}
+				if firstValue != testFirstValue {
+					t.Errorf("Actual first value = %v, Expected == %v", firstValue, testFirstValue)
+				}
+			}
+
+			// insert key 3 => [1, 2, 3]
+			{
+				lNode.insert(testThirdKey, testThirdValue)
+				if lNode.numKeys != 3 {
+					t.Errorf("Actual numKeys = %d, Expected == 3", lNode.numKeys)
+				}
+				if lNode.keys[0] != testFirstKey || lNode.keys[1] != testSecondKey || lNode.keys[2] != testThirdKey {
+					t.Errorf("Actual keys = %v, Expected == %v", lNode.keys[0:3], []uint64{testFirstKey, testSecondKey, testThirdKey})
+				}
+				if lNode.values[0] != testFirstValue || lNode.values[1] != testSecondValue || lNode.values[2] != testThirdValue {
+					t.Errorf("Actual values = %v, Expected == %v", lNode.values[0:3], [][10]byte{testFirstValue, testSecondValue, testThirdValue})
+				}
+
+				var thirdValue, thirdFound = lNode.get(testThirdKey)
+				if !thirdFound {
+					t.Errorf("Actual thirdFound = %t, Expected == true", thirdFound)
+				}
+				if thirdValue != testThirdValue {
+					t.Errorf("Actual first value = %v, Expected == %v", thirdValue, testThirdValue)
+				}
+			}
 		}
 	}
 }
