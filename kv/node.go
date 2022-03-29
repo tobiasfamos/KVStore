@@ -32,23 +32,26 @@ Solving with page size <S> for <n> we get:
 For a page size of 4096 we get <n> = 227
 */
 
-// NodeDataStartIndex is the starting index for the actual node information for both InternalNode and LeafNode.
-const NodeDataStartIndex = 8
+// KeyStartIndex is the starting index for keys for both InternalNode and LeafNode.
+const KeyStartIndex = 2
 
 // NumInternalKeys is the number of keys an InternalNode may hold at any given time.
-const NumInternalKeys = (PageSize - NodeDataStartIndex - KeyStartIndex - 4) / 12
+const NumInternalKeys = (PageSize - PageMetadataSize - KeyStartIndex - 4) / 12
+
+// NumInternalPages is the number of pages an InternalNode may hold at any given time.
+const NumInternalPages = NumInternalKeys + 1
 
 // InternalNodeSize is the size in bytes that an InternalNode uses.
 const InternalNodeSize = KeyStartIndex + 4 + 12*NumInternalKeys
 
 // NumLeafKeys is the number of keys a LeafNode may hold at any given time.
-const NumLeafKeys = (PageSize - NodeDataStartIndex - KeyStartIndex) / 18
+const NumLeafKeys = (PageSize - PageMetadataSize - KeyStartIndex) / 18
+
+// NumLeafValues is the number of values a LeafNode may hold at any given time.
+const NumLeafValues = NumLeafKeys
 
 // LeafNodeSize is the size in bytes that a LeafNode uses.
 const LeafNodeSize = KeyStartIndex + 18*NumLeafKeys
-
-// KeyStartIndex is the starting index for keys for both InternalNode and LeafNode.
-const KeyStartIndex = 2
 
 // PagesStartIndex is the starting index for the page IDs in InternalNode.
 const PagesStartIndex = KeyStartIndex + NumInternalKeys*8
@@ -66,7 +69,7 @@ An InternalNode takes at most InternalNodeSize bytes in memory.
 */
 type InternalNode struct {
 	keys    [NumInternalKeys]uint64
-	pages   [NumInternalKeys + 1]PageID
+	pages   [NumInternalPages]PageID
 	numKeys uint16
 }
 
@@ -79,7 +82,7 @@ A LeafNode takes at most LeafNodeSize bytes in memory.
 */
 type LeafNode struct {
 	keys    [NumLeafKeys]uint64
-	values  [NumLeafKeys][10]byte
+	values  [NumLeafValues][10]byte
 	numKeys uint16
 }
 

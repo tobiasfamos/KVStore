@@ -47,19 +47,13 @@ func (b *BufferPool) NewPage() (*Page, error) {
 	}
 
 	// allocate new page from disk
-	pageID, err := b.disk.AllocatePage()
+	page, err := b.disk.AllocatePage()
 	if err != nil {
 		return nil, err
 	}
 
-	page := &Page{
-		id:       pageID,
-		pinCount: 1,
-		isDirty:  false,
-		isLeaf:   false,
-		data:     [PageDataSize]byte{},
-	}
-	b.pageLookup[pageID] = *frameID
+	page.pinCount = 1
+	b.pageLookup[page.id] = *frameID
 	b.pages[*frameID] = page
 
 	return page, nil

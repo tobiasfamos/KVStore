@@ -23,25 +23,21 @@ func NewRAMDisk(initialSize uint32, maxPagesOnDisk uint32) Disk {
 	}
 }
 
-func (r *RAMDisk) AllocatePage() (PageID, error) {
-	var pageID PageID
+func (r *RAMDisk) AllocatePage() (*Page, error) {
+	page := &Page{}
 	// re-allocate deallocated pages
 	if len(r.deallocated) > 0 {
-		pageID = r.deallocated[0]
+		page.id = r.deallocated[0]
 		r.deallocated = r.deallocated[1:]
-
-		return pageID, nil
+	} else if uint32(r.nextPageID) >= r.maxPagesOnDisk {
+		return nil, errors.New("unable to allocate page on RAM disk")
+	} else {
+		page.id = r.nextPageID
+		r.nextPageID++
 	}
+	r.pages[page.id] = page
 
-	// cannot allocate more pages
-	if uint32(r.nextPageID) >= r.maxPagesOnDisk {
-		return 42, errors.New("unable to allocate page on RAM disk")
-	}
-
-	pageID = r.nextPageID
-	r.nextPageID++
-
-	return pageID, nil
+	return page, nil
 }
 
 func (r *RAMDisk) DeallocatePage(id PageID) {
