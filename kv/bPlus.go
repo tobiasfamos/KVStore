@@ -47,11 +47,11 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 		if store.rootNode.numKeys == 0 {
 			store.rootNode.keys[0] = separationKey
 			store.rootNode.numKeys += 1
-			leftPageId, err := createNewPageForLeaf(*leftLeafNode, store.bufferPool)
+			leftPageId, err := createNewPageForLeaf(leftLeafNode, &store.bufferPool)
 			if err != nil {
 				return err
 			}
-			rightPageId, err := createNewPageForLeaf(*rightLeafNode, store.bufferPool)
+			rightPageId, err := createNewPageForLeaf(rightLeafNode, &store.bufferPool)
 			if err != nil {
 				return err
 			}
@@ -177,7 +177,7 @@ func writeLeafToPageAndUnpin(page *Page, leafNode *LeafNode, bufferPool *BufferP
 	return nil
 }
 
-func createNewPageForLeaf(node LeafNode, pool BufferPool) (PageID, error) {
+func createNewPageForLeaf(node *LeafNode, pool *BufferPool) (PageID, error) {
 	newPage, err := pool.NewPage()
 	if err != nil {
 		return 42, err
@@ -185,6 +185,5 @@ func createNewPageForLeaf(node LeafNode, pool BufferPool) (PageID, error) {
 	copy(newPage.data[:], new(LeafNode).encode())
 	newPage.isLeaf = true
 	err = pool.UnpinPage(newPage.id, true)
-	_ = pool.FlushAllPages()
 	return newPage.id, nil
 }
