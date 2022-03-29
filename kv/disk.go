@@ -5,10 +5,9 @@ const MaxPagesOnDisk = 65535
 type Disk interface {
 	/*
 		AllocatePage allocates a new page and returns the associated ID.
-
-		Returns nil if no page can be allocated.
+		Returns an error if no page can be allocated.
 	*/
-	AllocatePage() *PageID
+	AllocatePage() (*PageID, error)
 	// DeallocatePage deallocates a page.
 	DeallocatePage(PageID)
 	// ReadPage reads a page if present. Otherwise an error will be raised.

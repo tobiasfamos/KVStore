@@ -2,11 +2,11 @@ package kv
 
 import (
 	"errors"
-	"log"
 )
 
 const MaxPoolSize = 16
 
+// FrameID is the cache frame ID (index) associated with a Page.
 type FrameID uint32
 
 /*
@@ -21,24 +21,23 @@ type BufferPool struct {
 }
 
 /*
-NewPage allocates a new page on the disk and caches it to buffer pool.
+NewPage allocates a new page on the disk and caches it to buffer pool
 
-This method returns nil if there are
-- no free frames,
-- no frame can be evicted from buffer, or
-the disk is full.
+This method returns an error if there are
+- no free frames and no frame can be evicted from buffer, or
+- the disk cannot allocate a new page.
 */
-func (b *BufferPool) NewPage() *Page {
+func (b *BufferPool) NewPage() (*Page, error) {
 	// get next free frame or evict from cache
-	frameID := b.getFrame()
-	if frameID == nil {
-		return nil
+	frameID, err := b.getFrame()
+	if err != nil {
+		return nil, err
 	}
 
 	// allocate new page from disk
-	pageID := b.disk.AllocatePage()
-	if pageID == nil {
-		return nil
+	pageID, err := b.disk.AllocatePage()
+	if err != nil {
+		return nil, err
 	}
 
 	page := &Page{
@@ -51,66 +50,73 @@ func (b *BufferPool) NewPage() *Page {
 	b.pageLookup[*pageID] = *frameID
 	b.pages[*frameID] = page
 
-	return page
+	return page, nil
 }
 
 /*
-FetchPage fetches a page.
+FetchPage fetches a page from buffer cache or disk.
 
-This method returns nil if there are
-- no free frames in buffer,
-- no frame can be evicted from buffer, or
-- the page cannot be found on disk
+This method returns ans error if there are
+- no free frames and no frame can be evicted from buffer, or
+- the page cannot be found in buffer or disk.
 */
-func (b *BufferPool) FetchPage(pageID PageID) *Page {
+func (b *BufferPool) FetchPage(pageID PageID) (*Page, error) {
 	// try fetch from cache
 	if frameID, ok := b.pageLookup[pageID]; ok {
 		page := b.pages[frameID]
 		page.pinCount++
 		b.eviction.Remove(frameID)
 
-		return page
+		return page, nil
 	}
 
 	// get next free frame or evict from cache
-	frameID := b.getFrame()
-	if frameID == nil {
-		return nil
+	frameID, err := b.getFrame()
+	if err != nil {
+		return nil, err
 	}
 
 	// try fetch from disk
 	page, err := b.disk.ReadPage(pageID)
 	if err != nil {
-		log.Println(err.Error())
-		return nil
+		return nil, err
 	}
 
 	page.pinCount = 1
 	b.pageLookup[pageID] = *frameID
 	b.pages[*frameID] = page
 
-	return page
+	return page, nil
 }
 
 /*
 FlushPage flushes a page to disk.
-
-Returns an error only if the page was not found.
+If writing to disk fails, the page gets reset and the error is returned.
+If the pageID cannot be found, an error is returned.
 */
 func (b *BufferPool) FlushPage(pageID PageID) error {
 	if frameID, ok := b.pageLookup[pageID]; ok {
-		page := b.pages[frameID]
-		page.decrementPinCount()
-
-		if err := b.disk.WritePage(page); err != nil {
-			log.Println(err.Error())
-		}
-		page.isDirty = false
-
-		return nil
+		return b.FlushFrame(frameID)
 	}
 
 	return errors.New("page not found")
+}
+
+/*
+FlushFrame flushes a page associated to the frameID to disk.
+If writing to disk fails, the page gets reset and the error is returned.
+*/
+func (b *BufferPool) FlushFrame(frameID FrameID) error {
+	page := b.pages[frameID]
+	wasDirty := page.isDirty
+	page.isDirty = false
+
+	if err := b.disk.WritePage(page); err != nil {
+		page.isDirty = wasDirty
+		return err
+	}
+
+	return nil
 }
 
 /*
@@ -190,11 +196,11 @@ getFrame returns a frame.
 The frame may either be from the
 - free frames list, or from
 - cache eviction
-If evicted, the frame gets removed from cache, potentially updating the disk if the associated page was dirty.
+If evicted, the frame gets removed from cache, potentially flushing to disk if the associated page was dirty.
 
-This method returns nil if there are no free frames and no frame can be evicted from cache.
+Returns an error if no frame can be allocated or flushing to disk fails.
 */
-func (b *BufferPool) getFrame() *FrameID {
+func (b *BufferPool) getFrame() (*FrameID, error) {
 	var frameID *FrameID
 	isEvicted := false
 
@@ -209,22 +215,24 @@ func (b *BufferPool) getFrame() *FrameID {
 
 	// no free frame found
 	if frameID == nil {
-		return nil
+		return nil, errors.New("unable to reserve buffer frame")
 	}
 
-	// if evicted from cache, update the table and write to disk when changed
+	// if evicted from cache, update the table and write to disk when dirty
 	if isEvicted {
-		currPage := b.pages[*frameID]
-		if currPage != nil {
-			if currPage.isDirty {
-				if err := b.disk.WritePage(currPage); err != nil {
-					log.Println(err.Error())
+		page := b.pages[*frameID]
+		if page != nil {
+			if page.isDirty {
+				page.isDirty = false
+				if err := b.disk.WritePage(page); err != nil {
+					page.isDirty = true
+					return nil, err
 				}
 			}
 
-			delete(b.pageLookup, currPage.id)
+			delete(b.pageLookup, page.id)
 		}
 	}
 
-	return frameID
+	return frameID, nil
 }

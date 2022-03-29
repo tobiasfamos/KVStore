@@ -2,7 +2,6 @@ package kv
 
 import (
 	"errors"
-	"log"
 )
 
 /*
@@ -22,26 +21,25 @@ func NewRAMDisk(initialSize uint) RAMDisk {
 	}
 }
 
-func (r RAMDisk) AllocatePage() *PageID {
+func (r RAMDisk) AllocatePage() (*PageID, error) {
 	var pageID PageID
 	// re-allocate deallocated pages
 	if len(r.deallocated) > 0 {
 		pageID = r.deallocated[0]
 		r.deallocated = r.deallocated[1:]
 
-		return &pageID
+		return &pageID, nil
 	}
 
 	// cannot allocate more pages
 	if r.nextPageID > MaxPagesOnDisk {
-		log.Println("RAMDISK:\t unable to allocate more pages")
-		return nil
+		return nil, errors.New("unable to allocate page on RAM disk")
 	}
 
 	pageID = r.nextPageID
 	r.nextPageID++
 
-	return &pageID
+	return &pageID, nil
 }
 
 func (r RAMDisk) DeallocatePage(id PageID) {
