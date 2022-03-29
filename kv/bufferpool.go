@@ -170,7 +170,7 @@ func (b *BufferPool) DeletePage(pageID PageID) error {
 
 /*
 UnpinPage unpins a page from the buffer pool for the current thread, potentially flagging the page as dirty.
-If no more threads are using the page, the page is eligible for cache eviction.
+If there are no more references to the page, the page is eligible for cache eviction.
 
 Returns an error only if the page was not found.
 */
@@ -178,12 +178,38 @@ func (b *BufferPool) UnpinPage(pageID PageID, isDirty bool) error {
 	if frameID, ok := b.pageLookup[pageID]; ok {
 		page := b.pages[frameID]
 		page.decrementPinCount()
+		page.isDirty = page.isDirty || isDirty
 
 		if page.pinCount == 0 {
 			b.eviction.Add(frameID)
 		}
 
-		page.isDirty = page.isDirty || isDirty
+		return nil
+	}
+
+	return errors.New("page not found")
+}
+
+/*
+UnpinAndFlushPage unpins the page and flushes it to disk.
+If there are no more references to the page, the page is eligible for cache eviction.
+
+Returns an error only if the page was not found or flushing failed.
+*/
+func (b *BufferPool) UnpinAndFlushPage(pageID PageID) error {
+	if frameID, ok := b.pageLookup[pageID]; ok {
+		page := b.pages[frameID]
+		page.decrementPinCount()
+		wasDirty := page.isDirty
+		page.isDirty = false
+
+		if err := b.disk.WritePage(page); err != nil {
+			page.isDirty = wasDirty
+			return err
+		}
+		if page.pinCount == 0 {
+			b.eviction.Add(frameID)
+		}
 
 		return nil
 	}
