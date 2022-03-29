@@ -8,38 +8,40 @@ import (
 RAMDisk is a memory mock of a disk.
 */
 type RAMDisk struct {
-	nextPageID  PageID
-	deallocated []PageID
-	pages       map[PageID]*Page
+	maxPagesOnDisk uint32
+	nextPageID     PageID
+	deallocated    []PageID
+	pages          map[PageID]*Page
 }
 
-func NewRAMDisk(initialSize uint) RAMDisk {
+func NewRAMDisk(initialSize uint, maxPagesOnDisk uint32) RAMDisk {
 	return RAMDisk{
-		nextPageID:  0,
-		deallocated: make([]PageID, 8),
-		pages:       make(map[PageID]*Page, initialSize),
+		maxPagesOnDisk: maxPagesOnDisk,
+		nextPageID:     0,
+		deallocated:    make([]PageID, 8),
+		pages:          make(map[PageID]*Page, initialSize),
 	}
 }
 
-func (r RAMDisk) AllocatePage() (*PageID, error) {
+func (r RAMDisk) AllocatePage() (PageID, error) {
 	var pageID PageID
 	// re-allocate deallocated pages
 	if len(r.deallocated) > 0 {
 		pageID = r.deallocated[0]
 		r.deallocated = r.deallocated[1:]
 
-		return &pageID, nil
+		return pageID, nil
 	}
 
 	// cannot allocate more pages
-	if r.nextPageID > MaxPagesOnDisk {
-		return nil, errors.New("unable to allocate page on RAM disk")
+	if uint32(r.nextPageID) > r.maxPagesOnDisk {
+		return 42, errors.New("unable to allocate page on RAM disk")
 	}
 
 	pageID = r.nextPageID
 	r.nextPageID++
 
-	return &pageID, nil
+	return pageID, nil
 }
 
 func (r RAMDisk) DeallocatePage(id PageID) {

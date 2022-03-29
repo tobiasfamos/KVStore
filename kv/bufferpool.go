@@ -53,13 +53,13 @@ func (b *BufferPool) NewPage() (*Page, error) {
 	}
 
 	page := &Page{
-		id:       *pageID,
+		id:       pageID,
 		pinCount: 1,
 		isDirty:  false,
 		isLeaf:   false,
 		data:     [PageDataSize]byte{},
 	}
-	b.pageLookup[*pageID] = *frameID
+	b.pageLookup[pageID] = *frameID
 	b.pages[*frameID] = page
 
 	return page, nil
