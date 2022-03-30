@@ -27,7 +27,7 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 	leafNode := decodeLeafNode(leafPage.data[:])
 	if leafNode.isFull() {
 		rightLeafNode, leftLeafNode, separationKey := splitLeafNode(leafNode)
-		leftPageId, err := createNewPageForLeaf(leftLeafNode, &store.bufferPool)
+		err := writeLeafToPageAndUnpin(leafPage, leftLeafNode, &store.bufferPool)
 		if err != nil {
 			return err
 		}
@@ -37,7 +37,6 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 		}
 		if store.rootNode.numKeys == 0 {
 			store.rootNode.keys[0] = separationKey
-			store.rootNode.pages[0] = leftPageId
 			store.rootNode.pages[1] = rightPageId
 			store.rootNode.numKeys += 1
 			return nil
@@ -51,17 +50,13 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			}
 
 			// Shift the Keys to the right and insert separation key on
-			store.rootNode.pages[indexToInsert-1] = leftPageId
-			nextPage := rightPageId
-			nextKey := separationKey
-			for keyIndex := indexToInsert; keyIndex < uint64(store.rootNode.numKeys+1); keyIndex++ {
-				tmpKey := store.rootNode.keys[keyIndex]
-				tmpPage := store.rootNode.pages[keyIndex]
-				store.rootNode.keys[keyIndex] = nextKey
-				store.rootNode.pages[keyIndex] = nextPage
-				nextKey = tmpKey
-				nextPage = tmpPage
+			//TODO Fix
+			for keyIndex := uint64(store.rootNode.numKeys); keyIndex > indexToInsert; keyIndex-- {
+				store.rootNode.keys[keyIndex] = store.rootNode.keys[keyIndex-1]
+				store.rootNode.pages[keyIndex] = store.rootNode.pages[keyIndex-1]
 			}
+			store.rootNode.keys[indexToInsert] = separationKey
+			store.rootNode.pages[indexToInsert+1] = rightPageId
 			store.rootNode.numKeys += 1
 		}
 		return nil
@@ -92,7 +87,7 @@ func splitLeafNode(leafNode LeafNode) (*LeafNode, *LeafNode, uint64) {
 	copy(leftLeafNode.values[:], leftSideValues)
 	leftLeafNode.numKeys = uint16(len(leftSideKeys))
 
-	separationKey := uint64(rightLeafNode.keys[0])
+	separationKey := uint64(leftLeafNode.keys[leftLeafNode.numKeys-1])
 	return rightLeafNode, leftLeafNode, separationKey
 }
 func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
@@ -109,10 +104,10 @@ func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 }
 
 func (store *BPlusStore) Create(config KvStoreConfig) error {
-	//TODo Replace with better value
+	//Todo Replace with better value-
 	numberOfPages := config.memorySize / PageSize
-	newCacheEviction := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(config.memorySize, 12)
+	newCacheEviction := NewLRUCache(20000)
+	newRamDisk := NewRAMDisk(config.memorySize, 20000)
 	localBufferPool := NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
 	store.bufferPool = localBufferPool
 	newPage, err := store.bufferPool.NewPage()
@@ -152,11 +147,14 @@ func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
 		return node.pages[0], nil
 	}
 	for index, currentKey := range node.keys {
-		if currentKey > key || index >= int(node.numKeys) {
+		if currentKey >= key || index >= int(node.numKeys) {
+			if index == 0 {
+				return node.pages[0], nil
+			}
 			if index > 0 {
 				return node.pages[index], nil
 			} else {
-				return node.pages[0], nil
+				return node.pages[node.numKeys], nil
 			}
 		}
 	}

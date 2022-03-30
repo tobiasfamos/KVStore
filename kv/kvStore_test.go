@@ -86,7 +86,7 @@ func TestBufferPoolNewPage(t *testing.T) {
 	memorySize := 4096 * 10
 	numberOfPages := memorySize / PageSize
 	newCacheEviction := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(uint32(memorySize), 12)
+	newRamDisk := NewRAMDisk(uint(memorySize), 12)
 	localBufferPool := NewBufferPool(uint(numberOfPages), newRamDisk, &newCacheEviction)
 
 	page1, _ := localBufferPool.NewPage()
@@ -153,7 +153,7 @@ func TestForceLeafNodeSplitOnce(t *testing.T) {
 func TestForceLeafNodeSplitFourTimes(t *testing.T) {
 	// Test inserting many elements to force a node split
 	kv, _ := helper.GetEmptyInstance()
-	for i := 0; i < 500; i += 1 {
+	for i := 0; i < 1000; i += 1 {
 		a := [10]byte{}
 		binary.LittleEndian.PutUint32(a[:], uint32(i))
 		err := kv.Put(uint64(i), a)

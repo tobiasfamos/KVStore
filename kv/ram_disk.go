@@ -2,6 +2,7 @@ package kv
 
 import (
 	"errors"
+	"fmt"
 )
 
 /*
@@ -30,7 +31,7 @@ func (r *RAMDisk) AllocatePage() (*Page, error) {
 		page.id = r.deallocated[0]
 		r.deallocated = r.deallocated[1:]
 	} else if uint(r.nextPageID) >= r.maxPagesOnDisk {
-		return nil, errors.New("unable to allocate page on RAM disk")
+		return nil, fmt.Errorf("unable to allocate page on RAM disk. max Page on Disk: %d", r.maxPagesOnDisk)
 	} else {
 		page.id = r.nextPageID
 		r.nextPageID++
