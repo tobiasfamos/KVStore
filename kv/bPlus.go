@@ -39,7 +39,7 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			store.rootNode.keys[0] = separationKey
 			store.rootNode.pages[1] = rightPageId
 			store.rootNode.numKeys += 1
-			return nil
+			return store.Put(key, value)
 		} else {
 			indexToInsert := uint64(store.rootNode.numKeys)
 			for keyIndex := 0; keyIndex < int(store.rootNode.numKeys); keyIndex++ {
@@ -59,7 +59,7 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			store.rootNode.pages[indexToInsert+1] = rightPageId
 			store.rootNode.numKeys += 1
 		}
-		return nil
+		return store.Put(key, value)
 	} else {
 		_, wasFound := leafNode.get(key)
 		if wasFound {
