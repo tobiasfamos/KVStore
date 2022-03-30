@@ -2,6 +2,8 @@ package kv
 
 import (
 	"encoding/binary"
+	"github.com/tobiasfamos/KVStore/search"
+	"github.com/tobiasfamos/KVStore/util"
 )
 
 /*
@@ -181,6 +183,12 @@ func (n *InternalNode) isFull() bool {
 	return n.numKeys == NumInternalKeys
 }
 
+// TODO: Add documentation
+func (n *InternalNode) contains(s uint64) bool {
+	_, found := search.Binary(s, n.keys[:n.numKeys])
+	return found
+}
+
 // getPage() returns the page id associated with the given key
 func (n *InternalNode) getPage(key uint64) PageID {
 	if n.numKeys == 0 {
@@ -195,6 +203,54 @@ func (n *InternalNode) getPage(key uint64) PageID {
 	}
 
 	return n.pages[n.numKeys]
+}
+
+// TODO: Add documentation. Raw unsafe method. caller must ensure tree coherence in regards to separator
+func (n *InternalNode) leftInsertPage(s uint64, id PageID) bool {
+	if n.isFull() {
+		return false
+	}
+
+	idx, found := search.Binary(s, n.keys[:n.numKeys])
+	if found {
+		return false
+	}
+
+	// move everything from idx onwards one up
+	copy(n.keys[idx+1:n.numKeys+1], n.keys[idx:n.numKeys])
+	copy(n.pages[idx+1:n.numKeys+1], n.pages[idx:n.numKeys])
+
+	n.keys[idx] = s
+	n.pages[idx] = id
+	n.numKeys++
+
+	return true
+}
+
+/*
+split splits the node into two of equal size in a best effort.
+
+The left node is in INCONSISTENT STATE, as it has <n> keys mapped to <n> pages such that the FURTHERMOST RIGHT PageID is missing.
+
+It returns (left, right, separator)
+*/
+func (n *InternalNode) split() (InternalNode, InternalNode, uint64) {
+	middle := n.numKeys / 2
+
+	left := InternalNode{}
+	left.numKeys = middle
+	copy(left.keys[:], n.keys[:middle])
+	copy(left.pages[:], n.pages[:middle])
+
+	right := InternalNode{}
+	right.numKeys = n.numKeys - middle
+	copy(right.keys[:], n.keys[middle:])
+	copy(right.pages[:], n.pages[middle:])
+
+	lastValid := util.Max(0, left.numKeys-1)
+	separator := (left.keys[lastValid] + right.keys[0]) / 2
+
+	return left, right, separator
 }
 
 // isFull() returns whether the node is full.
@@ -261,4 +317,28 @@ func (n *LeafNode) insert(key uint64, value [10]byte) bool {
 	n.numKeys++
 
 	return true
+}
+
+/*
+split splits the node into two of equal size in a best effort.
+
+It returns (left, right, separator)
+*/
+func (n *LeafNode) split() (LeafNode, LeafNode, uint64) {
+	middle := n.numKeys / 2
+
+	left := LeafNode{}
+	left.numKeys = middle
+	copy(left.keys[:], n.keys[:middle])
+	copy(left.values[:], n.values[:middle])
+
+	right := LeafNode{}
+	right.numKeys = n.numKeys - middle
+	copy(right.keys[:], n.keys[middle:])
+	copy(right.values[:], n.values[middle:])
+
+	lastValid := util.Max(0, left.numKeys-1)
+	separator := (left.keys[lastValid] + right.keys[0]) / 2
+
+	return left, right, separator
 }
