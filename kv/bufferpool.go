@@ -157,21 +157,52 @@ func (b *BufferPool) DeletePage(pageID PageID) error {
 	var frameID FrameID
 	var ok bool
 
-	// don't do anything when page is not in cache
-	if frameID, ok = b.pageLookup[pageID]; !ok {
-		return nil
+	// remove from buffer when in buffer
+	if frameID, ok = b.pageLookup[pageID]; ok {
+		page := b.pages[frameID]
+		if page.pinCount > 0 {
+			return errors.New("page cannot be deleted from buffer: pin count > 0")
+		}
+		if page.id != pageID {
+			return fmt.Errorf("incostent state: page.id (%d) != pageID (%d)", page.id, pageID) // good to catch logic bugs
+		}
+
+		delete(b.pageLookup, pageID)
+		b.eviction.Remove(frameID)
 	}
 
-	page := b.pages[frameID]
-	if page.pinCount > 0 {
-		return errors.New("page cannot be deleted from buffer: pin count > 0")
-	}
-	if page.id != pageID {
-		return fmt.Errorf("incostent state: page.id (%d) != pageID (%d)", page.id, pageID) // good to catch logic bugs
+	b.disk.DeallocatePage(pageID)
+	b.freeFrames = append(b.freeFrames, frameID)
+
+	return nil
+}
+
+/*
+UnpinAndDeletePage unpins the page and deletes it from the buffer pool and disk.
+
+Returns an error only if
+- the page is still pinned from somewhere else (pinCount > 0)
+- inconsistent state was detected (debugging only)
+*/
+func (b *BufferPool) UnpinAndDeletePage(pageID PageID) error {
+	var frameID FrameID
+	var ok bool
+
+	// remove from buffer when in buffer
+	if frameID, ok = b.pageLookup[pageID]; ok {
+		page := b.pages[frameID]
+		page.decrementPinCount()
+		if page.pinCount > 0 {
+			return errors.New("page cannot be deleted from buffer: pin count > 0")
+		}
+		if page.id != pageID {
+			return fmt.Errorf("incostent state: page.id (%d) != pageID (%d)", page.id, pageID) // good to catch logic bugs
+		}
+
+		delete(b.pageLookup, pageID)
+		b.eviction.Remove(frameID)
 	}
 
-	delete(b.pageLookup, pageID)
-	b.eviction.Remove(frameID)
 	b.disk.DeallocatePage(pageID)
 	b.freeFrames = append(b.freeFrames, frameID)
 
