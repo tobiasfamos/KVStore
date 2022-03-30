@@ -158,7 +158,7 @@ func TestForceLeafNodeSplitFourTimes(t *testing.T) {
 		binary.LittleEndian.PutUint32(a[:], uint32(i))
 		err := kv.Put(uint64(i), a)
 		if err != nil {
-			t.Errorf("Expected no error when putting elemnts; Got %v", err)
+			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
 		}
 	}
 

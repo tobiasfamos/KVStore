@@ -2,7 +2,6 @@ package kv
 
 import (
 	"errors"
-	"fmt"
 )
 
 type BPlusStore struct {
@@ -27,37 +26,43 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 	}
 	leafNode := decodeLeafNode(leafPage.data[:])
 	if leafNode.isFull() {
-		middle := int(len(leafNode.values) / 2)
-		leftSideKeys := leafNode.keys[:middle]
-		rightSideKeys := leafNode.keys[middle:]
-		leftSideValues := leafNode.values[:middle]
-		rightSideValues := leafNode.values[middle:]
-		rightLeafNode := new(LeafNode)
-		copy(rightLeafNode.keys[:], rightSideKeys)
-		copy(rightLeafNode.values[:], rightSideValues)
-		rightLeafNode.numKeys = uint16(len(rightSideKeys))
-
-		leftLeafNode := new(LeafNode)
-		copy(leftLeafNode.keys[:], leftSideKeys)
-		copy(leftLeafNode.values[:], leftSideValues)
-		leftLeafNode.numKeys = uint16(len(leftSideKeys))
-
-		separationKey := uint64(rightLeafNode.keys[0])
-		fmt.Print(separationKey)
+		rightLeafNode, leftLeafNode, separationKey := splitLeafNode(leafNode)
+		leftPageId, err := createNewPageForLeaf(leftLeafNode, &store.bufferPool)
+		if err != nil {
+			return err
+		}
+		rightPageId, err := createNewPageForLeaf(rightLeafNode, &store.bufferPool)
+		if err != nil {
+			return err
+		}
 		if store.rootNode.numKeys == 0 {
 			store.rootNode.keys[0] = separationKey
-			store.rootNode.numKeys += 1
-			leftPageId, err := createNewPageForLeaf(leftLeafNode, &store.bufferPool)
-			if err != nil {
-				return err
-			}
-			rightPageId, err := createNewPageForLeaf(rightLeafNode, &store.bufferPool)
-			if err != nil {
-				return err
-			}
 			store.rootNode.pages[0] = leftPageId
 			store.rootNode.pages[1] = rightPageId
+			store.rootNode.numKeys += 1
 			return nil
+		} else {
+			indexToInsert := uint64(store.rootNode.numKeys)
+			for keyIndex := 0; keyIndex < int(store.rootNode.numKeys); keyIndex++ {
+				if store.rootNode.keys[keyIndex] > separationKey {
+					indexToInsert = uint64(keyIndex)
+					break
+				}
+			}
+
+			// Shift the Keys to the right and insert separation key on
+			store.rootNode.pages[indexToInsert-1] = leftPageId
+			nextPage := rightPageId
+			nextKey := separationKey
+			for keyIndex := indexToInsert; keyIndex < uint64(store.rootNode.numKeys+1); keyIndex++ {
+				tmpKey := store.rootNode.keys[keyIndex]
+				tmpPage := store.rootNode.pages[keyIndex]
+				store.rootNode.keys[keyIndex] = nextKey
+				store.rootNode.pages[keyIndex] = nextPage
+				nextKey = tmpKey
+				nextPage = tmpPage
+			}
+			store.rootNode.numKeys += 1
 		}
 		return nil
 	} else {
@@ -69,6 +74,26 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 		writeLeafToPageAndUnpin(leafPage, &leafNode, &store.bufferPool)
 		return nil
 	}
+}
+
+func splitLeafNode(leafNode LeafNode) (*LeafNode, *LeafNode, uint64) {
+	middle := int(len(leafNode.values) / 2)
+	leftSideKeys := leafNode.keys[:middle]
+	rightSideKeys := leafNode.keys[middle:]
+	leftSideValues := leafNode.values[:middle]
+	rightSideValues := leafNode.values[middle:]
+	rightLeafNode := new(LeafNode)
+	copy(rightLeafNode.keys[:], rightSideKeys)
+	copy(rightLeafNode.values[:], rightSideValues)
+	rightLeafNode.numKeys = uint16(len(rightSideKeys))
+
+	leftLeafNode := new(LeafNode)
+	copy(leftLeafNode.keys[:], leftSideKeys)
+	copy(leftLeafNode.values[:], leftSideValues)
+	leftLeafNode.numKeys = uint16(len(leftSideKeys))
+
+	separationKey := uint64(rightLeafNode.keys[0])
+	return rightLeafNode, leftLeafNode, separationKey
 }
 func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 	leafPage, err := findLeafPageForKey(store.rootNode, key, store.bufferPool)
