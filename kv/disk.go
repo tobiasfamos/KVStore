@@ -13,7 +13,7 @@ type Disk interface {
 	// WritePage writes/updates a page.
 	WritePage(*Page) error
 	// Occupied returns the number of occupied pages.
-	Occupied() uint32
+	Occupied() uint
 	// Capacity of this disk.
-	Capacity() uint32
+	Capacity() uint
 }
