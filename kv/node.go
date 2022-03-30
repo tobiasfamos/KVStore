@@ -59,6 +59,12 @@ const PagesStartIndex = KeyStartIndex + NumInternalKeys*8
 // ValuesStartIndex is the starting index for the values in LeafNode.
 const ValuesStartIndex = KeyStartIndex + NumLeafKeys*8
 
+// Encoder specifies an interface implemented by things which can be encoded
+// into a page's worth o bytes.
+type Encoder interface {
+	encode() []byte
+}
+
 /*
 InternalNode is a node that points NumInternalKeys keys to NumInternalKeys + 1 pages in a pyramid scheme.
 The relationship uses less-or-equal for left-sided page IDs, greater for right-sided page IDs.

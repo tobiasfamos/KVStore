@@ -20,6 +20,42 @@ type BPlusStore struct {
 */
 
 func (store *BPlusStore) Put(key uint64, value [10]byte) error {
+	if store.rootNode.isFull() {
+		panic("Root is full, please fix")
+
+		// // When root node is full, we must split it into two internal
+		// // nodes and create a new root node.
+
+		// leftInternal, rightInternal, separator := splitInternalNode(store.rootNode)
+
+		// // We'll write the new left and right internal nodes to new
+		// // pages, and the new root node to the previous root page.
+		// leftPageId, err := createNewPage(leftInternal, &store.bufferPool)
+		// if err != nil {
+		// 	return err
+		// }
+		// rightPageId, err := createNewPage(rightInternal, &store.bufferPool)
+		// if err != nil {
+		// 	return err
+		// }
+
+		// // There are no pages in need of cleaning up, as the root
+		// // node's page will be recycled for the new root node.
+
+		// newRoot := InternalNode{}
+		// newRoot.keys[0] = separator
+		// newRoot.pages[0] = leftPageId
+		// newRoot.pages[1] = rightPageId
+		// newRoot.numKeys = 1
+		// // TODO we do currently not actually write the root node to a
+		// // page. This works as long as we will never persist it to
+		// // storage, but must be implemented at latest by that time.
+		// store.rootNode = newRoot
+
+		// // After having split root node, we must actually write the value still.
+		// return store.Put(key, value)
+	}
+
 	leafPage, err := findLeafPageForKey(store.rootNode, key, store.bufferPool)
 	if err != nil {
 		return err
@@ -27,11 +63,11 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 	leafNode := decodeLeafNode(leafPage.data[:])
 	if leafNode.isFull() {
 		rightLeafNode, leftLeafNode, separationKey := splitLeafNode(leafNode)
-		err := writeLeafToPageAndUnpin(leafPage, leftLeafNode, &store.bufferPool)
+		err := writeToPageAndUnpin(leafPage, leftLeafNode, &store.bufferPool)
 		if err != nil {
 			return err
 		}
-		rightPageId, err := createNewPageForLeaf(rightLeafNode, &store.bufferPool)
+		rightPageId, err := createNewPage(rightLeafNode, &store.bufferPool)
 		if err != nil {
 			return err
 		}
@@ -39,6 +75,9 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			store.rootNode.keys[0] = separationKey
 			store.rootNode.pages[1] = rightPageId
 			store.rootNode.numKeys += 1
+
+			// After having split a node we still need to actually insert
+			// the value which caused it to split.
 			return store.Put(key, value)
 		} else {
 			indexToInsert := uint64(store.rootNode.numKeys)
@@ -59,6 +98,9 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			store.rootNode.pages[indexToInsert+1] = rightPageId
 			store.rootNode.numKeys += 1
 		}
+
+		// After having split a node we still need to actually insert
+		// the value which caused it to split.
 		return store.Put(key, value)
 	} else {
 		_, wasFound := leafNode.get(key)
@@ -66,7 +108,7 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			return errors.New("Key already exists")
 		}
 		leafNode.insert(key, value)
-		writeLeafToPageAndUnpin(leafPage, &leafNode, &store.bufferPool)
+		writeToPageAndUnpin(leafPage, &leafNode, &store.bufferPool)
 		return nil
 	}
 }
@@ -90,6 +132,29 @@ func splitLeafNode(leafNode LeafNode) (*LeafNode, *LeafNode, uint64) {
 	separationKey := uint64(leftLeafNode.keys[leftLeafNode.numKeys-1])
 	return rightLeafNode, leftLeafNode, separationKey
 }
+
+func splitInternalNode(node InternalNode) (*InternalNode, *InternalNode, uint64) {
+	middle := len(node.pages) / 2
+
+	leftNode := &InternalNode{}
+	rightNode := &InternalNode{}
+
+	// Initialize new left and right nodes with left and right halves of
+	// splitting node's keys and values.
+	copy(leftNode.keys[:], node.keys[:middle])
+	copy(leftNode.pages[:], node.pages[:middle])
+	leftNode.numKeys = uint16(middle) // Contains indices 0 ... mid-1
+
+	copy(rightNode.keys[:], node.keys[middle:])
+	copy(rightNode.pages[:], node.pages[middle:])
+	rightNode.numKeys = uint16(len(rightNode.keys) - middle) // Contains indices mid ... len() - 1
+	// Separator is chosen as the largest element of the new left node,
+	// thus the "left node has keys <= separator" relation holds
+	separator := uint64(leftNode.keys[leftNode.numKeys-1])
+
+	return leftNode, rightNode, separator
+}
+
 func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 	leafPage, err := findLeafPageForKey(store.rootNode, key, store.bufferPool)
 	if err != nil {
@@ -191,8 +256,8 @@ func findLeafPageForKey(rootNode InternalNode, key uint64, pool BufferPool) (*Pa
 
 }
 
-func writeLeafToPageAndUnpin(page *Page, leafNode *LeafNode, bufferPool *BufferPool) error {
-	copy(page.data[:], leafNode.encode())
+func writeToPageAndUnpin(page *Page, encondable Encoder, bufferPool *BufferPool) error {
+	copy(page.data[:], encondable.encode())
 	err := bufferPool.UnpinPage(page.id, true)
 	if err != nil {
 		return err
@@ -200,12 +265,12 @@ func writeLeafToPageAndUnpin(page *Page, leafNode *LeafNode, bufferPool *BufferP
 	return nil
 }
 
-func createNewPageForLeaf(node *LeafNode, pool *BufferPool) (PageID, error) {
+func createNewPage(encodable Encoder, pool *BufferPool) (PageID, error) {
 	newPage, err := pool.NewPage()
 	if err != nil {
 		return 42, err
 	}
-	copy(newPage.data[:], node.encode())
+	copy(newPage.data[:], encodable.encode())
 	newPage.isLeaf = true
 	err = pool.UnpinPage(newPage.id, true)
 	return newPage.id, nil

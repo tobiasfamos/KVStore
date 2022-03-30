@@ -3,7 +3,6 @@ package kv
 import (
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -218,10 +217,6 @@ func TestPutKeyRandomly(t *testing.T) {
 		if err != nil {
 			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
 		}
-		if keyToPut == 2730814526 {
-			val, err := kv.Get(2730814526)
-			fmt.Printf("%v, %v", val, err)
-		}
 	}
 
 	// Now read them and ensure they are as expected
@@ -252,7 +247,7 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 
 }
 
-func TestSplitRooTNode(t *testing.T) {
+func TestSplitRootNode(t *testing.T) {
 	InsertRandom(t, 100000)
 }
 
@@ -268,7 +263,7 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert int) {
 		binary.LittleEndian.PutUint32(a[:], uint32(keyToPut))
 		err := kv.Put(uint64(keyToPut), a)
 		if err != nil {
-			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
+			t.Fatalf("Expected no error when putting key: %d; Got %v", i, err)
 		}
 	}
 
@@ -277,7 +272,7 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert int) {
 		expected := r1.Uint32()
 		val, err := kv.Get(uint64(expected))
 		if err != nil {
-			t.Fatalf("Index: %dError getting element %d: %v", i, expected, err)
+			t.Fatalf("Index %d: Error getting element %d: %v", i, expected, err)
 		}
 		convertedVal := binary.LittleEndian.Uint32(val[:])
 		if convertedVal != expected {
