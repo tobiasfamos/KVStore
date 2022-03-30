@@ -245,6 +245,53 @@ func TestPutKeyRandomly(t *testing.T) {
 
 }
 
+func TestPutKeyRandomlyMany(t *testing.T) {
+	const numberOfKeysToInsert = 700
+	// Put Keys in randomly to test the splitting of nodes.
+	InsertRandom(t, numberOfKeysToInsert)
+
+}
+
+func TestSplitRooTNode(t *testing.T) {
+	InsertRandom(t, 100000)
+}
+
+func InsertRandom(t *testing.T, numberOfKeysToInsert int) {
+	r := rand.New(rand.NewSource(99))
+
+	r1 := rand.New(rand.NewSource(99))
+
+	kv, _ := helper.GetEmptyInstance()
+	for i := 0; i < numberOfKeysToInsert; i += 1 {
+		a := [10]byte{}
+		keyToPut := r.Uint32()
+		binary.LittleEndian.PutUint32(a[:], uint32(keyToPut))
+		err := kv.Put(uint64(keyToPut), a)
+		if err != nil {
+			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
+		}
+	}
+
+	// Now read them and ensure they are as expected
+	for i := 0; i < numberOfKeysToInsert; i += 1 {
+		expected := r1.Uint32()
+		val, err := kv.Get(uint64(expected))
+		if err != nil {
+			t.Fatalf("Index: %dError getting element %d: %v", i, expected, err)
+		}
+		convertedVal := binary.LittleEndian.Uint32(val[:])
+		if convertedVal != expected {
+			t.Errorf(
+				"Index: %d, Got unexpected value %d for key %d; expected %d",
+				i,
+				convertedVal,
+				expected,
+				expected,
+			)
+		}
+	}
+}
+
 func TestPutExistingElement(t *testing.T) {
 	kv, _ := helper.GetEmptyInstance()
 

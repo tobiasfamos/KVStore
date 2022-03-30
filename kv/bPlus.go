@@ -53,7 +53,7 @@ func (store *BPlusStore) Put(key uint64, value [10]byte) error {
 			//TODO Fix
 			for keyIndex := uint64(store.rootNode.numKeys); keyIndex > indexToInsert; keyIndex-- {
 				store.rootNode.keys[keyIndex] = store.rootNode.keys[keyIndex-1]
-				store.rootNode.pages[keyIndex] = store.rootNode.pages[keyIndex-1]
+				store.rootNode.pages[keyIndex+1] = store.rootNode.pages[keyIndex]
 			}
 			store.rootNode.keys[indexToInsert] = separationKey
 			store.rootNode.pages[indexToInsert+1] = rightPageId
