@@ -7,8 +7,43 @@ import (
 
 type BTree struct {
 	bufferPool BufferPool
-	root       InternalNode
+	root       *INodePage
 	rootPage   *Page
+}
+
+func (t *BTree) createInitialTree() error {
+	var err error
+	t.rootPage, err = t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+
+	leftPage, err := t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+	_ = RawLNodeFrom(leftPage) // automatically sets isLeaf flag
+	err = t.bufferPool.UnpinPage(leftPage.id, true)
+	if err != nil {
+		return err
+	}
+
+	rightPage, err := t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+	_ = RawLNodeFrom(rightPage) // automatically sets isLeaf flag
+	err = t.bufferPool.UnpinPage(rightPage.id, true)
+	if err != nil {
+		return err
+	}
+
+	t.root = RawINodeFrom(t.rootPage)
+	*t.root.numKeys = 1
+	t.root.keys[0] = math.MaxUint64 / 2
+	t.root.pages[0] = leftPage.id
+	t.root.pages[1] = rightPage.id
+	return t.bufferPool.UnpinPage(t.rootPage.id, true)
 }
 
 func (t *BTree) Create(config KvStoreConfig) error {
@@ -17,33 +52,8 @@ func (t *BTree) Create(config KvStoreConfig) error {
 	newRamDisk := NewRAMDisk(config.memorySize, 20000)
 	t.bufferPool = NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
 
-	var err error
-	t.rootPage, err = t.bufferPool.NewPage()
-	if err != nil {
-		return err
-	}
-
-	leftPage, err := t.bufferPool.NewPage()
-	rightPage, err := t.bufferPool.NewPage()
-	err = t.bufferPool.UnpinPage(leftPage.id, true)
-	if err != nil {
-		return err
-	}
-	err = t.bufferPool.UnpinPage(rightPage.id, true)
-	if err != nil {
-		return err
-	}
-
-	t.root = InternalNode{}
-	t.root.numKeys = 1
-	t.root.keys[0] = math.MaxUint64 / 2
-	t.root.pages[0] = leftPage.id
-	t.root.pages[1] = rightPage.id
-
-	copy(t.rootPage.data[:], t.root.encode())
-	err = t.bufferPool.UnpinPage(t.rootPage.id, false)
-	if err != nil {
-		return err
+	if err := t.createInitialTree(); err != nil {
+		return nil
 	}
 
 	return nil
@@ -64,19 +74,27 @@ func (t *BTree) Close() error {
 	panic("implement me")
 }
 
-type visitor struct {
-	page *Page
-	node *InternalNode
-}
-type leafer struct {
-	page *Page
-	node LeafNode
-}
-
 func (t *BTree) Get(key uint64) ([10]byte, error) {
-	_, leaf := t.traverseTo(key)
-	value, found := leaf.node.get(key)
+	lastNode := t.root
+	var leaf *LNodePage
 
+	// find leaf
+	for leaf == nil {
+		id := lastNode.get(key)
+		page, err := t.bufferPool.FetchPage(id)
+		if err != nil {
+			return [10]byte{}, err
+		}
+
+		l, i := RawNodeFrom(page)
+		if l != nil {
+			leaf = l
+		} else {
+			lastNode = i
+		}
+	}
+
+	value, found := leaf.get(key)
 	if !found {
 		return value, errors.New("value not found")
 	} else {
@@ -85,99 +103,120 @@ func (t *BTree) Get(key uint64) ([10]byte, error) {
 }
 
 func (t *BTree) Put(key uint64, value [10]byte) error {
-	bufPool := t.bufferPool
+	visited, leaf, err := t.traverseTo(key)
+	if err != nil {
+		return err
+	}
 
-	visited, leaf := t.traverseTo(key)
-
-	if !leaf.node.isFull() {
-		leaf.node.insert(key, value)
+	if !leaf.isFull() {
+		leaf.insert(key, value)
 
 		// Cleanup
 		for _, internal := range visited {
-			err := bufPool.UnpinPage(internal.page.id, false)
+			err = t.bufferPool.UnpinPage(*internal.id, false)
 			if err != nil {
 				return err
 			}
 		}
-		err := bufPool.UnpinPage(leaf.page.id, true)
-		if err != nil {
-			return err
-		}
+		return t.bufferPool.UnpinPage(*leaf.id, true)
 	} else {
-		t.splitLeaf(visited, leaf, key, value)
+		return t.splitLeaf(visited, leaf, key, value)
 	}
-
-	return nil
 }
 
-func (t *BTree) traverseTo(key uint64) ([]visitor, leafer) {
-	visited := []visitor{{t.rootPage, &t.root}}
-	var leaf leafer
+func (t *BTree) traverseTo(key uint64) ([]*INodePage, *LNodePage, error) {
+	visited := []*INodePage{t.root}
+	var leaf *LNodePage
 
 	// find leaf
-	for leaf.page == nil {
-		id := visited[len(visited)-1].node.getPage(key)
-		page, _ := t.bufferPool.FetchPage(id)
+	for leaf == nil {
+		id := visited[len(visited)-1].get(key)
+		page, err := t.bufferPool.FetchPage(id)
+		if err != nil {
+			return nil, nil, err
+		}
 
-		if page.isLeaf {
-			leaf.page = page
-			leaf.node = decodeLeafNode(page.data[:])
+		l, i := RawNodeFrom(page)
+		if l != nil {
+			leaf = l
 		} else {
-			iNode := decodeInternalNode(page.data[:])
-			visited = append(visited, visitor{page, &iNode})
+			visited = append(visited, i)
 		}
 	}
 
-	return visited, leaf
+	return visited, leaf, nil
 }
 
-func (t *BTree) splitLeaf(visited []visitor, leaf leafer, key uint64, value [10]byte) {
-	left, right, separator := leaf.node.split()
+func (t *BTree) splitLeaf(visited []*INodePage, leaf *LNodePage, key uint64, value [10]byte) error {
+	leftPage, err := t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+	left, separator := leaf.splitLeft(leftPage)
+	// leaf is the new right node
+	right := leaf
 
-	left.insert(key, value)
-	leftPage, _ := t.bufferPool.NewPage()
-	copy(leftPage.data[:], left.encode())
-	_ = t.bufferPool.UnpinPage(leftPage.id, true)
+	if key <= separator {
+		left.insert(key, value)
+	} else {
+		right.insert(key, value)
+	}
 
-	copy(leaf.page.data[:], right.encode())
-	_ = t.bufferPool.UnpinPage(leaf.page.id, true)
+	err = t.bufferPool.UnpinPage(*left.id, true)
+	if err != nil {
+		return err
+	}
+	err = t.bufferPool.UnpinPage(*right.id, true)
+	if err != nil {
+		return err
+	}
 
-	t.insertToParent(visited, separator, leftPage.id)
+	return t.insertToParent(visited, separator, leftPage.id)
 }
 
-func (t *BTree) insertToParent(visited []visitor, separator uint64, pageID PageID) {
-	if len(visited) == 0 {
+func (t *BTree) insertToParent(visited []*INodePage, separator uint64, pageID PageID) error {
+	if pageID == PageID(0) {
 		t.insertNewRoot(separator, pageID)
-		return
+		return nil
 	}
 
 	last := len(visited) - 1
 	parent := visited[last]
 
-	if !parent.node.isFull() {
-		parent.node.leftInsertPage(separator, pageID)
+	if !parent.isFull() {
+		parent.leftInsert(separator, pageID)
 
 		// Cleanup
 		for _, internal := range visited {
-			isDirty := parent == internal
-			_ = t.bufferPool.UnpinPage(internal.page.id, isDirty)
+			_ = t.bufferPool.UnpinPage(*internal.id, true)
 		}
 	} else {
-		t.splitInternal(visited[:last], parent)
+		return t.splitInternal(visited[:last], parent)
 	}
+
+	return nil
 }
 
-func (t *BTree) splitInternal(visited []visitor, child visitor) {
-	left, right, separator := child.node.split()
+func (t *BTree) splitInternal(visited []*INodePage, child *INodePage) error {
+	leftPage, err := t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
 
-	leftPage, _ := t.bufferPool.NewPage()
-	copy(leftPage.data[:], left.encode())
-	_ = t.bufferPool.UnpinPage(leftPage.id, true)
+	left, separator := child.splitLeft(leftPage)
+	// child is the new right node
+	right := child
 
-	copy(child.page.data[:], right.encode())
-	_ = t.bufferPool.UnpinPage(child.page.id, true)
+	err = t.bufferPool.UnpinPage(*left.id, true)
+	if err != nil {
+		return err
+	}
+	err = t.bufferPool.UnpinPage(*right.id, true)
+	if err != nil {
+		return err
+	}
 
-	t.insertToParent(visited, separator, leftPage.id)
+	return t.insertToParent(visited, separator, *left.id)
 }
 
 func (t *BTree) insertNewRoot(separator uint64, id PageID) {
