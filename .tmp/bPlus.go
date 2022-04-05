@@ -1,12 +1,13 @@
-package kv
+package tmp
 
 import (
 	"errors"
+	"github.com/tobiasfamos/KVStore/kv"
 )
 
 type BPlusStore struct {
 	rootNode   InternalNode
-	bufferPool BufferPool
+	bufferPool kv.BufferPool
 }
 
 /*
@@ -168,12 +169,12 @@ func (store *BPlusStore) Get(key uint64) ([10]byte, error) {
 	return value, nil
 }
 
-func (store *BPlusStore) Create(config KvStoreConfig) error {
+func (store *BPlusStore) Create(config kv.KvStoreConfig) error {
 	//Todo Replace with better value-
-	numberOfPages := config.memorySize / PageSize
-	newCacheEviction := NewLRUCache(20000)
-	newRamDisk := NewRAMDisk(config.memorySize, 20000)
-	localBufferPool := NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
+	numberOfPages := config.memorySize / kv.PageSize
+	newCacheEviction := kv.NewLRUCache(20000)
+	newRamDisk := kv.NewRAMDisk(config.memorySize, 20000)
+	localBufferPool := kv.NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
 	store.bufferPool = localBufferPool
 	newPage, err := store.bufferPool.NewPage()
 	if err != nil {
@@ -207,7 +208,7 @@ func (store *BPlusStore) Close() error {
 // Search the partition Keys of an Internal Node to find the next Node.
 // Traverse all Partition keys. As soon as a partition Key is bigger than the key to find,
 // return the "previous" page ID"
-func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
+func findPointerByKey(node InternalNode, key uint64) (kv.PageID, error) {
 	if node.numKeys == 0 {
 		return node.pages[0], nil
 	}
@@ -226,7 +227,7 @@ func findPointerByKey(node InternalNode, key uint64) (PageID, error) {
 	return 0, errors.New("could nod find Node")
 }
 
-func findNextPageByKey(node InternalNode, key uint64, pool BufferPool) (*Page, error) {
+func findNextPageByKey(node InternalNode, key uint64, pool kv.BufferPool) (*kv.Page, error) {
 	nextNodeID, err := findPointerByKey(node, key)
 	if err != nil {
 		return nil, err
@@ -238,8 +239,8 @@ func findNextPageByKey(node InternalNode, key uint64, pool BufferPool) (*Page, e
 	return nextPage, nil
 }
 
-func findLeafPageForKey(rootNode InternalNode, key uint64, pool BufferPool) (*Page, error) {
-	var currentPage *Page
+func findLeafPageForKey(rootNode InternalNode, key uint64, pool kv.BufferPool) (*kv.Page, error) {
+	var currentPage *kv.Page
 	currentNode := rootNode
 	for true {
 		var err error
@@ -256,7 +257,7 @@ func findLeafPageForKey(rootNode InternalNode, key uint64, pool BufferPool) (*Pa
 
 }
 
-func writeToPageAndUnpin(page *Page, encondable Encoder, bufferPool *BufferPool) error {
+func writeToPageAndUnpin(page *kv.Page, encondable Encoder, bufferPool *kv.BufferPool) error {
 	copy(page.data[:], encondable.encode())
 	err := bufferPool.UnpinPage(page.id, true)
 	if err != nil {
@@ -265,7 +266,7 @@ func writeToPageAndUnpin(page *Page, encondable Encoder, bufferPool *BufferPool)
 	return nil
 }
 
-func createNewPage(encodable Encoder, pool *BufferPool) (PageID, error) {
+func createNewPage(encodable Encoder, pool *kv.BufferPool) (kv.PageID, error) {
 	newPage, err := pool.NewPage()
 	if err != nil {
 		return 42, err

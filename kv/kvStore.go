@@ -35,14 +35,6 @@ type KeyValueStore interface {
 	Close() error
 }
 
-func NewBPlusStore() *BPlusStore {
-	store := BPlusStore{
-		rootNode:   InternalNode{},
-		bufferPool: BufferPool{},
-	}
-	return &store
-}
-
 // KVStoreConfig provides parameters used to initialize a new KV store.
 type KvStoreConfig struct {
 	memorySize       uint   // Maximum amount of memory to be used by KV store

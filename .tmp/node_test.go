@@ -1,7 +1,8 @@
-package kv
+package tmp
 
 import (
 	"bytes"
+	"github.com/tobiasfamos/KVStore/kv"
 	"testing"
 )
 
@@ -12,14 +13,14 @@ const (
 	testSecondKey = 2
 	testThirdKey  = 3
 
-	testFirstPageID  = PageID(1)
-	testSecondPageID = PageID(2)
-	testThirdPageID  = PageID(3)
+	testFirstPageID  = kv.PageID(1)
+	testSecondPageID = kv.PageID(2)
+	testThirdPageID  = kv.PageID(3)
 )
 
 var (
 	testKeys    = []uint64{testFirstKey, testSecondKey, testThirdKey}
-	testPageIDs = []PageID{testFirstPageID, testSecondPageID, testThirdPageID}
+	testPageIDs = []kv.PageID{testFirstPageID, testSecondPageID, testThirdPageID}
 
 	testFirstValue  = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 10}
 	testSecondValue = [10]byte{0, 0, 0, 0, 0, 0, 0, 0, 0, 20}
@@ -28,15 +29,15 @@ var (
 )
 
 type testNodes struct {
-	page         Page
+	page         kv.Page
 	InternalNode *InternalNode
 	leafNode     *LeafNode
 	isEmpty      bool
 	isFull       bool
 }
 
-func testInternalNode() ([PageDataSize]byte, InternalNode) {
-	internalData := [PageDataSize]byte{
+func testInternalNode() ([kv.PageDataSize]byte, InternalNode) {
+	internalData := [kv.PageDataSize]byte{
 		0, testNumKeys, // numKeys (2 bytes)
 		0, 0, 0, 0, 0, 0, 0, testFirstKey, // first key (8 bytes)
 		0, 0, 0, 0, 0, 0, 0, testSecondKey, // second key (8 bytes)
@@ -49,14 +50,14 @@ func testInternalNode() ([PageDataSize]byte, InternalNode) {
 	})
 	internalNode := InternalNode{
 		keys:    [NumInternalKeys]uint64{testFirstKey, testSecondKey},
-		pages:   [NumInternalPages]PageID{testFirstPageID, testSecondPageID, testThirdPageID},
+		pages:   [NumInternalPages]kv.PageID{testFirstPageID, testSecondPageID, testThirdPageID},
 		numKeys: testNumKeys,
 	}
 	return internalData, internalNode
 }
 
-func testLeafNode() ([PageDataSize]byte, LeafNode) {
-	leafData := [PageDataSize]byte{
+func testLeafNode() ([kv.PageDataSize]byte, LeafNode) {
+	leafData := [kv.PageDataSize]byte{
 		0, testNumKeys, // numKeys (2 bytes)
 		0, 0, 0, 0, 0, 0, 0, testFirstKey, // first key (8 bytes)
 		0, 0, 0, 0, 0, 0, 0, testSecondKey, // second key (8 bytes)
@@ -74,10 +75,10 @@ func exampleNodes() []testNodes {
 	iData, iNode := testInternalNode()
 	lData, lNode := testLeafNode()
 	return []testNodes{
-		{Page{}, &InternalNode{}, nil, true, false},
-		{Page{isLeaf: true}, nil, &LeafNode{}, true, false},
-		{Page{data: iData}, &iNode, nil, false, false},
-		{Page{isLeaf: true, data: lData}, nil, &lNode, false, false},
+		{kv.Page{}, &InternalNode{}, nil, true, false},
+		{kv.Page{isLeaf: true}, nil, &LeafNode{}, true, false},
+		{kv.Page{data: iData}, &iNode, nil, false, false},
+		{kv.Page{isLeaf: true, data: lData}, nil, &lNode, false, false},
 	}
 }
 

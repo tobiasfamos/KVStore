@@ -16,7 +16,7 @@ type TestHelper struct {
 //
 // This should be called in the test suite's setup method.
 func (helper *TestHelper) Initialize() {
-	dir, err := ioutil.TempDir("/tmp", "kv_store_testrun_")
+	dir, err := os.MkdirTemp("..\\tmp", "kv_store_testrun_")
 	if err != nil {
 		log.Fatalf("Unable to create temporary working directory: %v", err)
 	}

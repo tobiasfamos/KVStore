@@ -4,7 +4,7 @@ package kv
 const PageSize = 4096
 
 // PageMetadataSize is the size of the page metadata. Equivalent to the starting index of page data.
-const PageMetadataSize = 8
+const PageMetadataSize = 7
 
 // PageDataSize is the buffer size for data to be stored in a Page.
 const PageDataSize = PageSize - PageMetadataSize
@@ -21,8 +21,6 @@ type Page struct {
 	pinCount uint16
 	// isDirty indicates the page was modified after being read.
 	isDirty bool
-	// isLeaf indicates the page to be either a LeafNode or an InternalNode.
-	isLeaf bool
 	// data stores the raw node data.
 	data [PageDataSize]byte
 }

@@ -3,6 +3,7 @@ package kv
 import (
 	"github.com/tobiasfamos/KVStore/search"
 	"github.com/tobiasfamos/KVStore/util"
+	"log"
 	"unsafe"
 )
 
@@ -78,7 +79,7 @@ type LNodePage struct {
 
 // RawNodeFrom transmutes a Page into either an LNodePage or an INodePage, depending on the IsLeafIndex.
 func RawNodeFrom(page *Page) (*LNodePage, *INodePage) {
-	if page.data[IsLeafIndex] == 0 {
+	if page.data[IsLeafIndex] == 1 {
 		return RawLNodeFrom(page), nil
 	} else {
 		return nil, RawINodeFrom(page)
@@ -89,6 +90,7 @@ func RawNodeFrom(page *Page) (*LNodePage, *INodePage) {
 // If IsLeafIndex has the wrong value it gets corrected and the page gets marked as isDirty.
 func RawINodeFrom(page *Page) *INodePage {
 	if page.data[IsLeafIndex] != 0 {
+		log.Println("Interpreting non-INode data as INode")
 		page.data[IsLeafIndex] = 0
 		page.isDirty = true
 	}
@@ -116,7 +118,7 @@ func (n *INodePage) get(key uint64) PageID {
 		panic("invalid state: INodePage should not be empty")
 	}
 
-	idx, _ := search.Binary(key, n.keys)
+	idx, _ := search.Binary(key, n.keys[:*n.numKeys])
 	return n.pages[idx]
 }
 
@@ -139,7 +141,7 @@ func (n *INodePage) leftInsert(s uint64, id PageID) bool {
 	// move everything from idx onwards one up
 	util.ShiftRight(n.keys, idx, uint(*n.numKeys))
 	n.keys[idx] = s
-	util.ShiftRight(n.keys, idx, uint(*n.numKeys)+1)
+	util.ShiftRight(n.pages, idx, uint(*n.numKeys)+1)
 	n.pages[idx] = id
 	*n.numKeys++
 
@@ -179,6 +181,7 @@ func (n *INodePage) splitLeft(pageForLeftNode *Page) (*INodePage, uint64) {
 // If IsLeafIndex has the wrong value it gets corrected and the page gets marked as isDirty.
 func RawLNodeFrom(page *Page) *LNodePage {
 	if page.data[IsLeafIndex] == 0 {
+		log.Println("Interpreting non-LNode data as LNode")
 		page.isDirty = true
 		page.data[IsLeafIndex] = 1
 	}
@@ -247,7 +250,8 @@ This LNodePage will be mutated to be the right node.
 It returns (left, separator)
 */
 func (n *LNodePage) splitLeft(pageForLeftNode *Page) (*LNodePage, uint64) {
-	middle := *n.numKeys / 2
+	numKeys := *n.numKeys
+	middle := numKeys / 2
 
 	left := RawLNodeFrom(pageForLeftNode)
 	*left.numKeys = middle
@@ -255,13 +259,14 @@ func (n *LNodePage) splitLeft(pageForLeftNode *Page) (*LNodePage, uint64) {
 	copy(left.keys[:], n.keys[:middle])
 	copy(left.values[:], n.values[:middle])
 
-	*n.numKeys = *n.numKeys - middle
-	*n.isDirty = true
-	util.ShiftLeftBy(n.keys, middle, *n.numKeys, middle)
-	util.ShiftLeftBy(n.values, middle, *n.numKeys, middle)
+	right := n
+	*right.numKeys = numKeys - middle
+	*right.isDirty = true
+	util.ShiftLeftBy(right.keys, middle, numKeys, middle)
+	util.ShiftLeftBy(right.values, middle, numKeys, middle)
 
 	lastValid := util.Max(0, *left.numKeys-1)
-	separator := (left.keys[lastValid] + n.keys[0]) / 2
+	separator := (left.keys[lastValid] + right.keys[0]) / 2
 
 	return left, separator
 }

@@ -1,7 +1,8 @@
-package kv
+package tmp
 
 import (
 	"encoding/binary"
+	"github.com/tobiasfamos/KVStore/kv"
 	"github.com/tobiasfamos/KVStore/search"
 	"github.com/tobiasfamos/KVStore/util"
 )
@@ -38,7 +39,7 @@ For a page size of 4096 we get <n> = 227
 const KeyStartIndex = 2
 
 // NumInternalKeys is the number of keys an InternalNode may hold at any given time.
-const NumInternalKeys = (PageSize - PageMetadataSize - KeyStartIndex - 4) / 12
+const NumInternalKeys = (kv.PageSize - kv.PageMetadataSize - KeyStartIndex - 4) / 12
 
 // NumInternalPages is the number of pages an InternalNode may hold at any given time.
 const NumInternalPages = NumInternalKeys + 1
@@ -47,7 +48,7 @@ const NumInternalPages = NumInternalKeys + 1
 const InternalNodeSize = KeyStartIndex + 4 + 12*NumInternalKeys
 
 // NumLeafKeys is the number of keys a LeafNode may hold at any given time.
-const NumLeafKeys = (PageSize - PageMetadataSize - KeyStartIndex) / 18
+const NumLeafKeys = (kv.PageSize - kv.PageMetadataSize - KeyStartIndex) / 18
 
 // NumLeafValues is the number of values a LeafNode may hold at any given time.
 const NumLeafValues = NumLeafKeys
@@ -77,7 +78,7 @@ An InternalNode takes at most InternalNodeSize bytes in memory.
 */
 type InternalNode struct {
 	keys    [NumInternalKeys]uint64
-	pages   [NumInternalPages]PageID
+	pages   [NumInternalPages]kv.PageID
 	numKeys uint16
 }
 
@@ -110,7 +111,7 @@ func decodeInternalNode(slice []byte) InternalNode {
 	for i := 0; i < NumInternalKeys+1; i++ {
 		var from = PagesStartIndex + i*4
 		var to = from + 4
-		node.pages[i] = PageID(binary.BigEndian.Uint32(slice[from:to]))
+		node.pages[i] = kv.PageID(binary.BigEndian.Uint32(slice[from:to]))
 	}
 
 	return node
@@ -190,7 +191,7 @@ func (n *InternalNode) contains(s uint64) bool {
 }
 
 // getPage() returns the page id associated with the given key
-func (n *InternalNode) getPage(key uint64) PageID {
+func (n *InternalNode) getPage(key uint64) kv.PageID {
 	if n.numKeys == 0 {
 		panic("InternalNode should not be empty")
 	}
@@ -206,7 +207,7 @@ func (n *InternalNode) getPage(key uint64) PageID {
 }
 
 // TODO: Add documentation. Raw unsafe method. caller must ensure tree coherence in regards to separator
-func (n *InternalNode) leftInsertPage(s uint64, id PageID) bool {
+func (n *InternalNode) leftInsertPage(s uint64, id kv.PageID) bool {
 	if n.isFull() {
 		return false
 	}
