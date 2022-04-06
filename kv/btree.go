@@ -70,8 +70,13 @@ func (t *BTree) Delete() error {
 }
 
 func (t *BTree) Close() error {
+	t.bufferPool.PrintDebugInfo()
 	//TODO implement me
 	panic("implement me")
+}
+
+func (t *BTree) PrintDebugInformation() {
+	t.bufferPool.PrintDebugInfo()
 }
 
 func (t *BTree) Get(key uint64) ([10]byte, error) {

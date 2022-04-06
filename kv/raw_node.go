@@ -60,6 +60,20 @@ type INodePage struct {
 	pages    []PageID
 }
 
+func (n *INodePage) PrintDebugInfo() {
+	log.Printf(
+		"INode {"+
+			"\n\tid:       %d"+
+			"\n\tpinCount: %d"+
+			"\n\tisDirty:  %t"+
+			"\n\tnumKeys:  %d"+
+			"\n\tkeys:     %d"+
+			"\n\tpages:    %d"+
+			"\n}\n",
+		*n.id, *n.pinCount, *n.isDirty, *n.numKeys, n.keys, n.pages,
+	)
+}
+
 /*
 LNodePage is a leaf node page that points NumLeafKeys keys to NumLeafKeys values in a key-value relationship.
 
@@ -75,6 +89,20 @@ type LNodePage struct {
 	numKeys  *uint16
 	keys     []uint64
 	values   [][10]byte
+}
+
+func (n *LNodePage) PrintDebugInfo() {
+	log.Printf(
+		"LNode {"+
+			"\n\tid:       %d"+
+			"\n\tpinCount: %d"+
+			"\n\tisDirty:  %t"+
+			"\n\tnumKeys:  %d"+
+			"\n\tkeys:     %d"+
+			"\n\tvalues:   %d"+
+			"\n}\n",
+		*n.id, *n.pinCount, *n.isDirty, *n.numKeys, n.keys, n.values,
+	)
 }
 
 // RawNodeFrom transmutes a Page into either an LNodePage or an INodePage, depending on the IsLeafIndex.

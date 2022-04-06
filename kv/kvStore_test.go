@@ -161,7 +161,7 @@ func TestForceLeafNodeSplitOnce(t *testing.T) {
 }
 
 func TestForceLeafNodeSplitFourTimes(t *testing.T) {
-	t.Skip("Not working yet, is in an endless loop. Perhaps a new node is not seen as a LNode and it gets stuck.")
+	//t.Skip("Not working yet, is in an endless loop. Perhaps a new node is not seen as a LNode and it gets stuck.")
 
 	// Test inserting many elements to force a node split
 	kv, _ := helper.GetEmptyInstance()
@@ -173,6 +173,8 @@ func TestForceLeafNodeSplitFourTimes(t *testing.T) {
 			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
 		}
 	}
+
+	kv.PrintDebugInformation()
 
 	tests := []struct {
 		key uint64

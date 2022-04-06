@@ -33,6 +33,9 @@ type KeyValueStore interface {
 	// Close persists the active KV store to disk and unloads it. If it
 	// fails, an error is returned.
 	Close() error
+
+	// PrintDebugInformation prints some debug stuff to the logger.
+	PrintDebugInformation()
 }
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
@@ -78,4 +81,8 @@ func (*KvStoreStub) Delete() error {
 }
 func (*KvStoreStub) Close() error {
 	return nil
+}
+
+func (*KvStoreStub) PrintDebugInformation() {
+
 }
