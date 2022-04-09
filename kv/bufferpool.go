@@ -19,15 +19,32 @@ type BufferPool struct {
 	freeFrames []FrameID
 }
 
-func (b *BufferPool) PrintDebugInfo() {
-	for _, fid := range b.pageLookup {
-		lnode, inode := RawNodeFrom(b.pages[fid])
-		if lnode != nil {
-			lnode.PrintDebugInfo()
-		} else {
-			inode.PrintDebugInfo()
+func (b *BufferPool) GetDebugInfo() string {
+	debug := fmt.Sprintf("%T {"+
+		"\n\tdisk:              %T"+
+		"\n\teviction:          %T"+
+		"\n\t# of pages:        %d"+
+		"\n\t# of cached pages: %d"+
+		"\n\tpages:\n",
+		b, b.disk, b.eviction, len(b.pages), len(b.pageLookup),
+	)
+
+	for _, page := range b.pages {
+		if page == nil {
+			continue
+		}
+
+		if _, ok := b.pageLookup[page.id]; ok {
+			lnode, inode := RawNodeFrom(page)
+			if lnode != nil {
+				debug += lnode.GetDebugInfo()
+			} else {
+				debug += inode.GetDebugInfo()
+			}
 		}
 	}
+
+	return debug + "}"
 }
 
 /*
@@ -224,9 +241,9 @@ func (b *BufferPool) UnpinAndDeletePage(pageID PageID) error {
 UnpinPage unpins a page from the buffer pool for the current thread, potentially flagging the page as dirty.
 If there are no more references to the page, the page is eligible for cache eviction.
 
-Returns an error only if the page was not found.
+If the page was not found this is a noop.
 */
-func (b *BufferPool) UnpinPage(pageID PageID, isDirty bool) error {
+func (b *BufferPool) UnpinPage(pageID PageID, isDirty bool) {
 	if frameID, ok := b.pageLookup[pageID]; ok {
 		page := b.pages[frameID]
 		page.decrementPinCount()
@@ -235,18 +252,16 @@ func (b *BufferPool) UnpinPage(pageID PageID, isDirty bool) error {
 		if page.pinCount == 0 {
 			b.eviction.Add(frameID)
 		}
-
-		return nil
 	}
-
-	return errors.New("page not found")
 }
 
 /*
 UnpinAndFlushPage unpins the page and flushes it to disk.
 If there are no more references to the page, the page is eligible for cache eviction.
 
-Returns an error only if the page was not found or flushing failed.
+If the page was not found this is a noop.
+
+Returns an error only if flushing the page failed.
 */
 func (b *BufferPool) UnpinAndFlushPage(pageID PageID) error {
 	if frameID, ok := b.pageLookup[pageID]; ok {
@@ -263,10 +278,9 @@ func (b *BufferPool) UnpinAndFlushPage(pageID PageID) error {
 			b.eviction.Add(frameID)
 		}
 
-		return nil
 	}
 
-	return errors.New("page not found")
+	return nil
 }
 
 /*

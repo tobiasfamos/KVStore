@@ -37,7 +37,7 @@ func TestBufferPool_NewPage(t *testing.T) {
 			t.Errorf("NewPage data should be zeroed")
 		}
 
-		_ = bufferPool.UnpinPage(page.id, false)
+		bufferPool.UnpinPage(page.id, false)
 	}
 
 	// test unable to allocate page on disk
@@ -75,10 +75,10 @@ func TestBufferPool_FetchPage(t *testing.T) {
 				t.Errorf("Actual FetchPage = %x, Expected == %x", &fetch, &page)
 			}
 
-			_ = bufferPool.UnpinPage(fetch.id, false)
+			bufferPool.UnpinPage(fetch.id, false)
 		}
 
-		_ = bufferPool.UnpinPage(page.id, false)
+		bufferPool.UnpinPage(page.id, false)
 	}
 }
 
@@ -107,7 +107,7 @@ func TestBufferPool_FlushAllPages(t *testing.T) {
 	for i := 0; i < testBufferPoolSize; i++ {
 		page, _ := bufferPool.NewPage()
 		page.data[0] = byte(i)
-		_ = bufferPool.UnpinPage(page.id, true)
+		bufferPool.UnpinPage(page.id, true)
 	}
 
 	// test flushing errors
@@ -125,7 +125,7 @@ func TestBufferPool_FlushAllPages(t *testing.T) {
 		if read.data[0] != byte(i) {
 			t.Errorf("Actual page data[0] = %d, Expected == %d", read.data[0], byte(i))
 		}
-		_ = bufferPool.UnpinPage(read.id, false)
+		bufferPool.UnpinPage(read.id, false)
 	}
 }
 
@@ -136,7 +136,7 @@ func TestBufferPool_DeletePage(t *testing.T) {
 	for i := 0; i < testMaxDiskSize; i++ {
 		for j := 0; j < i; j++ {
 			page, _ := bufferPool.NewPage()
-			_ = bufferPool.UnpinPage(page.id, false)
+			bufferPool.UnpinPage(page.id, false)
 
 			err := bufferPool.DeletePage(page.id)
 			if err != nil {

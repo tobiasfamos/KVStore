@@ -34,8 +34,8 @@ type KeyValueStore interface {
 	// fails, an error is returned.
 	Close() error
 
-	// PrintDebugInformation prints some debug stuff to the logger.
-	PrintDebugInformation()
+	// GetDebugInformation gets some debug stuff.
+	GetDebugInformation() string
 }
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
@@ -83,6 +83,6 @@ func (*KvStoreStub) Close() error {
 	return nil
 }
 
-func (*KvStoreStub) PrintDebugInformation() {
-
+func (*KvStoreStub) GetDebugInformation() string {
+	return "KvStoreStub"
 }

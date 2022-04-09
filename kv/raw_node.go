@@ -1,9 +1,9 @@
 package kv
 
 import (
+	"fmt"
 	"github.com/tobiasfamos/KVStore/search"
 	"github.com/tobiasfamos/KVStore/util"
-	"log"
 	"unsafe"
 )
 
@@ -60,8 +60,8 @@ type INodePage struct {
 	pages    []PageID
 }
 
-func (n *INodePage) PrintDebugInfo() {
-	log.Printf(
+func (n *INodePage) GetDebugInfo() string {
+	return fmt.Sprintf(
 		"INode {"+
 			"\n\tid:       %d"+
 			"\n\tpinCount: %d"+
@@ -69,7 +69,7 @@ func (n *INodePage) PrintDebugInfo() {
 			"\n\tnumKeys:  %d"+
 			"\n\tkeys:     %d"+
 			"\n\tpages:    %d"+
-			"\n}\n",
+			"\n}",
 		*n.id, *n.pinCount, *n.isDirty, *n.numKeys, n.keys, n.pages,
 	)
 }
@@ -91,16 +91,15 @@ type LNodePage struct {
 	values   [][10]byte
 }
 
-func (n *LNodePage) PrintDebugInfo() {
-	log.Printf(
-		"LNode {"+
-			"\n\tid:       %d"+
-			"\n\tpinCount: %d"+
-			"\n\tisDirty:  %t"+
-			"\n\tnumKeys:  %d"+
-			"\n\tkeys:     %d"+
-			"\n\tvalues:   %d"+
-			"\n}\n",
+func (n *LNodePage) GetDebugInfo() string {
+	return fmt.Sprintf("LNode {"+
+		"\n\tid:       %d"+
+		"\n\tpinCount: %d"+
+		"\n\tisDirty:  %t"+
+		"\n\tnumKeys:  %d"+
+		"\n\tkeys:     %d"+
+		"\n\tvalues:   %d"+
+		"\n}",
 		*n.id, *n.pinCount, *n.isDirty, *n.numKeys, n.keys, n.values,
 	)
 }
@@ -118,7 +117,7 @@ func RawNodeFrom(page *Page) (*LNodePage, *INodePage) {
 // If IsLeafIndex has the wrong value it gets corrected and the page gets marked as isDirty.
 func RawINodeFrom(page *Page) *INodePage {
 	if page.data[IsLeafIndex] != 0 {
-		log.Println("Interpreting non-INode data as INode")
+		//log.Println("Interpreting non-INode data as INode")
 		page.data[IsLeafIndex] = 0
 		page.isDirty = true
 	}
@@ -129,9 +128,18 @@ func RawINodeFrom(page *Page) *INodePage {
 	return &INodePage{&page.id, &page.pinCount, &page.isDirty, numKeys, keys, pages}
 }
 
+// keyRange returns the (min, max) key range of an INodePage. If the page was empty, it returns (0, 0).
+func (n *INodePage) keyRange() (uint64, uint64) {
+	return n.keys[0], n.keys[util.Max(0, *n.numKeys-1)]
+}
+
 // isFull returns whether the INodePage is full.
 func (n *INodePage) isFull() bool {
 	return *n.numKeys == NumInternalKeys
+}
+
+func (n *INodePage) isEmpty() bool {
+	return *n.numKeys == 0
 }
 
 // contains returns whether the INodePage contains a specific separator.
@@ -150,66 +158,62 @@ func (n *INodePage) get(key uint64) PageID {
 	return n.pages[idx]
 }
 
-// leftInsert inserts a new separator into an INodePage, preserving the order of keys.
-// The inserted PageID will be the LEFT target node for the separator.
-// Meaning that get(separator) will return the newly inserted PageID.
+// rightInsert inserts a new separator into an INodePage, preserving the order of keys.
+// The inserted PageID will be the RIGHT target node for the separator.
+// Meaning that get(separator+1) will return the newly inserted PageID.
 //
 // SAFETY: The caller must ensure tree coherence in regards to separator and all child values. Otherwise the tree invariant does not hold!
 //
 // If the INodePage is already isFull or the node already contains the key,
 // nothing will be done and the method returns false.
 // Otherwise the method returns true.
-func (n *INodePage) leftInsert(s uint64, id PageID) bool {
+func (n *INodePage) rightInsert(key uint64, id PageID) bool {
 	if n.isFull() {
 		return false
 	}
 
-	idx, _ := search.Binary(s, n.keys[:*n.numKeys])
+	idx, found := search.Binary(key, n.keys[:*n.numKeys])
+	if found {
+		return false
+	}
 
 	// move everything from idx onwards one up
-	util.ShiftRight(n.keys, idx, uint(*n.numKeys))
-	n.keys[idx] = s
-	util.ShiftRight(n.pages, idx, uint(*n.numKeys)+1)
-	n.pages[idx] = id
+	util.ShiftRight(n.keys, idx, uint(*n.numKeys), key)
+	util.ShiftRight(n.pages, idx+1, uint(*n.numKeys)+1, id)
 	*n.numKeys++
-
 	*n.isDirty = true
+
 	return true
 }
 
-/*
-splitLeft splits an INodePage into two of equal size in a best effort.
-This INodePage will be mutated to be the right node.
+// splitRight splits an INodePage in the middle into a left (itself) and a right node.
+// The right node lives in the provided page.
+//
+// Returns (and zeroes) the last key of the left node as a separator for the parent node (left-biased) and the right node.
+func (n *INodePage) splitRight(pageForRightNode *Page) (uint64, *INodePage) {
+	numKeys := *n.numKeys
+	middle := numKeys / 2
 
-The left node is in INCONSISTENT STATE, as it has <n> keys mapped to <n> pages such that the FURTHERMOST RIGHT PageID is missing.
+	right := RawINodeFrom(pageForRightNode)
+	*right.isDirty = true
+	*right.numKeys = numKeys - middle
+	util.MoveSlice(right.keys[0:*right.numKeys], n.keys[middle:numKeys], 0)
+	util.MoveSlice(right.pages[0:*right.numKeys+1], n.pages[middle:numKeys+1], PageID(0))
 
-It returns (left, separator)
-*/
-func (n *INodePage) splitLeft(pageForLeftNode *Page) (*INodePage, uint64) {
-	middle := *n.numKeys / 2
-
-	left := RawINodeFrom(pageForLeftNode)
-	*left.numKeys = middle
+	left := n
 	*left.isDirty = true
-	copy(left.keys[:], n.keys[:middle])
-	copy(left.pages[:], n.pages[:middle])
+	*left.numKeys = middle - 1 // offset by one as the middle will be the parent separator!
 
-	*n.numKeys = *n.numKeys - middle
-	*n.isDirty = true
-	util.ShiftLeftBy(n.keys, middle, *n.numKeys, middle)
-	util.ShiftLeftBy(n.pages, middle, *n.numKeys+1, middle)
+	parentSeparator := util.Replace(&left.keys[*left.numKeys], 0)
 
-	lastValid := util.Max(0, *left.numKeys-1)
-	separator := (left.keys[lastValid] + n.keys[0]) / 2
-
-	return left, separator
+	return parentSeparator, right
 }
 
 // RawLNodeFrom explicitly transmutes a Page into an LNodePage.
 // If IsLeafIndex has the wrong value it gets corrected and the page gets marked as isDirty.
 func RawLNodeFrom(page *Page) *LNodePage {
 	if page.data[IsLeafIndex] == 0 {
-		log.Println("Interpreting non-LNode data as LNode")
+		//log.Println("Interpreting non-LNode data as LNode")
 		page.isDirty = true
 		page.data[IsLeafIndex] = 1
 	}
@@ -223,6 +227,10 @@ func RawLNodeFrom(page *Page) *LNodePage {
 // isFull returns whether the LNodePage is full.
 func (n *LNodePage) isFull() bool {
 	return *n.numKeys == NumLeafKeys
+}
+
+func (n *LNodePage) isEmpty() bool {
+	return *n.numKeys == 0
 }
 
 // contains returns whether an LNodePage contain a specific key.
@@ -259,11 +267,8 @@ func (n *LNodePage) insert(key uint64, value [10]byte) bool {
 		return false
 	}
 
-	util.ShiftRight(n.keys, idx, uint(*n.numKeys))
-	n.keys[idx] = key
-
-	util.ShiftRight(n.values, idx, uint(*n.numKeys))
-	n.values[idx] = value
+	util.ShiftRight(n.keys, idx, uint(*n.numKeys), key)
+	util.ShiftRight(n.values, idx, uint(*n.numKeys), value)
 
 	*n.numKeys++
 
@@ -271,30 +276,25 @@ func (n *LNodePage) insert(key uint64, value [10]byte) bool {
 	return true
 }
 
-/*
-splitLeft splits an LNodePage into two of equal size in a best effort.
-This LNodePage will be mutated to be the right node.
-
-It returns (left, separator)
-*/
-func (n *LNodePage) splitLeft(pageForLeftNode *Page) (*LNodePage, uint64) {
+// splitRight splits an LNodePage in the middle into a left (itself) and a right node.
+// The right node lives in the provided page.
+//
+// Returns the last key of the left node as a separator for the parent node (left-biased) and the right node.
+func (n *LNodePage) splitRight(pageForRightNode *Page) (uint64, *LNodePage) {
 	numKeys := *n.numKeys
 	middle := numKeys / 2
 
-	left := RawLNodeFrom(pageForLeftNode)
-	*left.numKeys = middle
-	*left.isDirty = true
-	copy(left.keys[:], n.keys[:middle])
-	copy(left.values[:], n.values[:middle])
-
-	right := n
-	*right.numKeys = numKeys - middle
+	right := RawLNodeFrom(pageForRightNode)
 	*right.isDirty = true
-	util.ShiftLeftBy(right.keys, middle, numKeys, middle)
-	util.ShiftLeftBy(right.values, middle, numKeys, middle)
+	*right.numKeys = numKeys - middle
+	util.MoveSlice(right.keys[0:*right.numKeys], n.keys[middle:numKeys], 0)
+	util.MoveSlice(right.values[0:*right.numKeys], n.values[middle:numKeys], [10]byte{})
 
-	lastValid := util.Max(0, *left.numKeys-1)
-	separator := (left.keys[lastValid] + right.keys[0]) / 2
+	left := n
+	*left.isDirty = true
+	*left.numKeys = middle
 
-	return left, separator
+	parentSeparator := left.keys[*left.numKeys-1]
+
+	return parentSeparator, right
 }
