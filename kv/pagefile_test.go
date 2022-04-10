@@ -2,7 +2,9 @@ package kv
 
 import (
 	"bytes"
+	"encoding/binary"
 	"errors"
+	"hash/crc32"
 	"os"
 	"testing"
 )
@@ -38,11 +40,10 @@ func TestInitialize(t *testing.T) {
 
 	expected := make([]byte, PageSize)
 	expected[3] = 0x05 // Capacity
-	// Checksum
-	expected[PageSize-4] = 0x7e
-	expected[PageSize-3] = 0x13
-	expected[PageSize-2] = 0x12
-	expected[PageSize-1] = 0xfc
+
+	// Checksum must be calculated dynamically, as it will depend on the page size
+	checksum := crc32.ChecksumIEEE(expected[:PageSize-4])
+	binary.BigEndian.PutUint32(expected[PageSize-4:], checksum)
 
 	actual, err := os.ReadFile(path)
 	if err != nil {
@@ -120,11 +121,9 @@ func TestPageFileDecodeMetaData(t *testing.T) {
 	metaData[35] = 0x63
 	metaData[39] = 0x03
 
-	// Checksum
-	metaData[PageSize-4] = 0x56
-	metaData[PageSize-3] = 0xe7
-	metaData[PageSize-2] = 0x46
-	metaData[PageSize-1] = 0x09
+	// Checksum must be calculated dynamically, as it will depend on the page size
+	checksum := crc32.ChecksumIEEE(metaData[:PageSize-4])
+	binary.BigEndian.PutUint32(metaData[PageSize-4:], checksum)
 
 	err := pf.decodeMetaData(metaData)
 	if err != nil {
