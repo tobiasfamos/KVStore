@@ -22,6 +22,126 @@ func TestFull(t *testing.T) {
 	}
 }
 
+func TestReadAndWritePage(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	page1 := &Page{
+		id:   0,
+		data: [PageDataSize]byte{0x21, 0x30, 0xA0, 0xFB},
+	}
+
+	page2 := &Page{
+		id:   42,
+		data: [PageDataSize]byte{0x00, 0x2},
+	}
+
+	err := pf.WritePage(page1)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page1.id, err)
+	}
+	if pf.PageCount != 1 {
+		t.Errorf("Expected page file to have page count 1; got %d", pf.PageCount)
+	}
+
+	err = pf.WritePage(page2)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page2.id, err)
+	}
+	if pf.PageCount != 2 {
+		t.Errorf("Expected page file to have page count 2; got %d", pf.PageCount)
+	}
+
+	p1Read, err := pf.ReadPage(page1.id)
+	if err != nil {
+		t.Fatalf("Error reading page %d: %v", page1.id, err)
+	}
+
+	p2Read, err := pf.ReadPage(page2.id)
+	if err != nil {
+		t.Fatalf("Error reading page %d: %v", page2.id, err)
+	}
+
+	if !comparePage(page1, p1Read) {
+		t.Errorf(
+			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
+			page1.id,
+			p1Read,
+			page1,
+		)
+	}
+
+	if !comparePage(page2, p2Read) {
+		t.Errorf(
+			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
+			page2.id,
+			p2Read,
+			page2,
+		)
+	}
+}
+
+func TestWriteNewPagePersistsMetadata(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	page1 := &Page{
+		id:   0,
+		data: [PageDataSize]byte{0x21, 0x30, 0xA0, 0xFB},
+	}
+
+	page2 := &Page{
+		id:   42,
+		data: [PageDataSize]byte{0x00, 0x2},
+	}
+
+	err := pf.WritePage(page1)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page1.id, err)
+	}
+
+	err = pf.WritePage(page2)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page2.id, err)
+	}
+
+	// Now we'll reinitialize and make sure that it all still works
+	err = pf.Initialize()
+	if err != nil {
+		t.Fatalf("Error reinitializing page file: %v", err)
+	}
+
+	p1Read, err := pf.ReadPage(page1.id)
+	if err != nil {
+		t.Fatalf("Error reading page %d: %v", page1.id, err)
+	}
+
+	p2Read, err := pf.ReadPage(page2.id)
+	if err != nil {
+		t.Fatalf("Error reading page %d: %v", page2.id, err)
+	}
+
+	if !comparePage(page1, p1Read) {
+		t.Errorf(
+			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
+			page1.id,
+			p1Read,
+			page1,
+		)
+	}
+
+	if !comparePage(page2, p2Read) {
+		t.Errorf(
+			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
+			page2.id,
+			p2Read,
+			page2,
+		)
+	}
+}
+
+func comparePage(a, b *Page) bool {
+	return a.id == b.id && a.isDirty == b.isDirty && a.pinCount == b.pinCount && a.data == b.data
+}
+
 func TestInitialize(t *testing.T) {
 	pf, path := newPageFile(t)
 
@@ -168,9 +288,21 @@ func newPageFile(t *testing.T) (*PageFile, string) {
 		Capacity: 5,
 	}
 
-	err := pf.Initialize()
+	// TODO this is a bit ugly. PageFile requires the file to *not* be
+	// present to trigger automatic initialization of the file. However
+	// helper.GetTempFile() *creates* the file.
+	//
+	// We work around this by deleting it, which is awful and could be
+	// subject to an (unlikely) race condition.
+	err := os.Remove(file)
 	if err != nil {
-		t.Errorf("Unable to initialize page file: %v", err)
+		t.Fatalf("Unable to remove temporary file: %v", err)
+	}
+
+	// Initialize the page file
+	err = pf.Initialize()
+	if err != nil {
+		t.Fatalf("Unable to initialize page file: %v", err)
 	}
 
 	return &pf, file

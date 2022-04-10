@@ -2,6 +2,7 @@ package kv
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"hash/crc32"
 	"os"
@@ -26,20 +27,139 @@ type PageFile struct {
 //
 // If an IO error is encountered or the file is full, an error is returned.
 func (pf *PageFile) WritePage(page *Page) error {
+	var offset uint32
+	metaDataDirty := false // Whether we must flush the PageFile's meta data
+
+	_, exist := pf.PageLocations[page.id]
+	if exist {
+		// Page ID already present in file, we'll overwrite
+		offset = pf.PageLocations[page.id]
+	} else {
+		var err error
+		offset, err = pf.findEmptyOffset()
+		if err != nil {
+			// Page file is full
+			return err
+		}
+
+		// Page ID new to this file, we'll add to the lookup map and mark our meta data as dirty
+		metaDataDirty = true
+		pf.PageLocations[page.id] = offset
+		pf.PageCount++
+	}
+
+	data := make([]byte, PageSize)
+
+	// The page contains 7 bytes which we needn't store here, as it's
+	// either available in another place (i.e. the ID), or irrelevant (i.e.
+	// the dirty flag and pin count).
+	// Instead, we'll use four of these bytes to store a CRC32 checksum,
+	// and then will with the actual page data.
+
+	// Four bytes of checksum
+	checksum := crc32.ChecksumIEEE(page.data[:])
+	binary.BigEndian.PutUint32(data[0:4], checksum)
+
+	// Then the PageDataSize bytes of page data
+	copy(data[4:PageDataSize+4], page.data[:])
+
+	file, err := os.OpenFile(pf.Path, os.O_WRONLY, 0666)
+	if err != nil {
+		return fmt.Errorf("IO error while trying to open page file: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.WriteAt(data, int64(offset))
+	if err != nil {
+		return fmt.Errorf("IO error while trying to write to page file: %v", err)
+	}
+
+	if metaDataDirty {
+		err = pf.storeMetaData()
+		if err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// findEmptyOffset finds the first unused offset in the page file.
+//
+// If the page file is full, an error is returned.
+func (pf *PageFile) findEmptyOffset() (uint32, error) {
+	var offset uint32
+
+	if pf.Full() {
+		return offset, fmt.Errorf("No space left in this page file")
+	}
+
+	// This is a very brute-force approach, but given:
+	// - The lower number of pages per page file
+	// - The frequency at which a new page will be written
+	// This seems ok as an MVP.
+	occupied := make(map[uint32]bool)
+	for _, v := range pf.PageLocations {
+		occupied[v] = true
+	}
+
+	// First page is for meta data, so the lowest allowed byte offset for
+	// an actual page is PageSize
+	for i := uint32(PageSize); i < pf.Capacity*PageSize; i += PageSize {
+		_, exist := occupied[i]
+		if !exist {
+			return i, nil
+		}
+	}
+
+	// We earlier ensured that we are not full, so we may never get to
+	// here.
+	panic("PageFile.findEmptyOffset(): Unreachable code")
 }
 
 // ReadPage read the page with the given ID from the file.
 //
 // If an IO error is encountered or no such page exists, an error is returned.
 func (pf *PageFile) ReadPage(id PageID) (*Page, error) {
-	return &Page{}, nil
+	offset, exist := pf.PageLocations[id]
+	if !exist {
+		return &Page{}, fmt.Errorf("No page with ID %d in this page file", id)
+	}
+
+	file, err := os.Open(pf.Path)
+	if err != nil {
+		return &Page{}, fmt.Errorf("Error reading page file: %v", err)
+	}
+	defer file.Close()
+
+	page := make([]byte, PageSize)
+	_, err = file.ReadAt(page, int64(offset))
+	if err != nil {
+		return &Page{}, fmt.Errorf("Error reading from page file: %v", err)
+	}
+
+	// First four bytes are checksum
+	checksum := binary.BigEndian.Uint32(page[0:4])
+	// Then PageDataSize of page data
+	var pageData [PageDataSize]byte
+	copy(pageData[:], page[4:4+PageDataSize])
+
+	// Verify the checksum
+	newChecksum := crc32.ChecksumIEEE(pageData[:])
+	if newChecksum != checksum {
+		return &Page{}, fmt.Errorf("Checksum in file different from checksum calculated from data: %x != %x", checksum, newChecksum)
+	}
+
+	return &Page{
+		id:   id,
+		data: pageData,
+	}, nil
 }
 
 // Initialize initializes a new page file.
 //
-// Be mindful that this will overwrite any content of the page file, if one
-// exists already.
+// If the page file already exists on disk, metadata is read from there.
+// Otherwise, a new file is initalized and metadata writen to disk.
 //
 // If an IO error is encountered an error is returned.
 func (pf *PageFile) Initialize() error {
@@ -53,9 +173,18 @@ func (pf *PageFile) Initialize() error {
 		)
 	}
 
-	pf.storeMetaData()
-
-	return nil
+	exists, err := pf.exists()
+	if err != nil {
+		return err
+	}
+	if exists {
+		// Load from disk
+		return pf.loadMetaData()
+	} else {
+		// Initialize and flush to disk
+		pf.PageLocations = make(map[PageID]uint32)
+		return pf.storeMetaData()
+	}
 }
 
 // Full returns a boolean indicating whether this file is full.
@@ -63,14 +192,14 @@ func (pf *PageFile) Full() bool {
 	return pf.PageCount == pf.Capacity
 }
 
-func (pf *PageFile) metaDataSize() uint32 {
+func (pf *PageFile) metaDataSize() int {
 	// - 4 bytes for capacity
 	// - 4 bytes for page count
 	// - Capacity * (4+4) bytes for the map
 	// - 4 bytes for CRC
 	size := 4 + 4 + pf.Capacity*(4+4) + 4
 
-	return size
+	return int(size)
 }
 
 // encodeMetaData() encodes meta data as a byte slice.
@@ -104,9 +233,17 @@ func (pf *PageFile) encodeMetaData() []byte {
 
 // loadMetaData loads the PageFile's meta data from file.
 func (pf *PageFile) loadMetaData() error {
-	data, err := os.ReadFile(pf.Path)
+	file, err := os.Open(pf.Path)
 	if err != nil {
-		return fmt.Errorf("IO error while trying to read meta data: %v", err)
+		return fmt.Errorf("IO error while trying to open page file: %v", err)
+	}
+	defer file.Close()
+
+	// First page's worth of data is meta data
+	data := make([]byte, PageSize)
+	_, err = file.ReadAt(data, 0)
+	if err != nil {
+		return fmt.Errorf("IO error while trying to read page file meta data: %v", err)
 	}
 
 	return pf.decodeMetaData(data)
@@ -114,14 +251,13 @@ func (pf *PageFile) loadMetaData() error {
 
 // storeMetaData stores the PageFile's meta data to file.
 func (pf *PageFile) storeMetaData() error {
-	metaData := pf.encodeMetaData()
-
-	file, err := os.OpenFile(pf.Path, os.O_CREATE|os.O_RDWR, 0666)
+	file, err := os.OpenFile(pf.Path, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return fmt.Errorf("IO error while trying to open page file: %v", err)
 	}
 	defer file.Close()
 
+	metaData := pf.encodeMetaData()
 	_, err = file.WriteAt(metaData, 0)
 	if err != nil {
 		return fmt.Errorf("IO error while writing meta data to page file: %v", err)
@@ -135,6 +271,10 @@ func (pf *PageFile) storeMetaData() error {
 // If the provided binary data is not a valid encoding, an error is returned.
 // The page file's meta data is not affected if this is the case.
 func (pf *PageFile) decodeMetaData(data []byte) error {
+	if len(data) < pf.metaDataSize() {
+		return fmt.Errorf("Meta data had invalid size: %d (expected %d)", len(data), pf.metaDataSize())
+	}
+
 	checksum := binary.BigEndian.Uint32(data[len(data)-4:])
 	data = data[:len(data)-4]
 
@@ -163,4 +303,20 @@ func (pf *PageFile) decodeMetaData(data []byte) error {
 	pf.PageLocations = pageLocations
 
 	return nil
+}
+
+// exists checks whether the page file already exists on disk
+func (pf *PageFile) exists() (bool, error) {
+	file, err := os.Open(pf.Path)
+	if err == nil {
+		file.Close()
+		return true, nil
+	} else {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		} else {
+			return false, fmt.Errorf("IO error while checking whether file %s exists: %v", pf.Path, err)
+		}
+	}
+
 }
