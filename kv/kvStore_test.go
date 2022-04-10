@@ -87,8 +87,10 @@ func TestBufferPoolNewPage(t *testing.T) {
 	memorySize := 4096 * 10
 	numberOfPages := memorySize / PageSize
 	newCacheEviction := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(uint(memorySize), 12)
-	localBufferPool := NewBufferPool(uint(numberOfPages), newRamDisk, &newCacheEviction)
+
+	disk, _ := newDisk(t)
+
+	localBufferPool := NewBufferPool(uint(numberOfPages), disk, &newCacheEviction)
 
 	page1, _ := localBufferPool.NewPage()
 	localBufferPool.UnpinPage(page1.id, true)
@@ -250,7 +252,7 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 }
 
 func TestSplitRootNode(t *testing.T) {
-	t.Skip("Issue to be fixed")
+	t.Skip("Fixme")
 	// FIXME: It seems like splitting the root node (or any internal node???) results in an incoherent tree structure
 	// Maybe look at all Node.SplitRight() methods and any usages in the BTree.
 	// I didn't found out exactly where the error came from after long debugging sessions.

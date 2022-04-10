@@ -3,8 +3,9 @@ package kv
 import "bytes"
 
 // PageSize is the default page size of a whole page.
-// const PageSize = 4096
-const PageSize = 64
+const PageSize = 4096
+
+// const PageSize = 64
 
 // PageMetadataSize is the size of the page metadata. Equivalent to the starting index of page data.
 const PageMetadataSize = 7

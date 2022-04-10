@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"fmt"
 	"math"
-	"os"
 	"path/filepath"
 	"testing"
 )
 
 // TODO ReadPage should return an error if the page read does not exist
 // TODO and also if it's a recycled one which wasn't reassigned
+// TODO a test which reads/writes thousands of pages to ensure we don't lose anything
 
 func TestNewPersistentDisk(t *testing.T) {
 	dir := helper.GetTempDir(t, "persistent_disk")
@@ -118,7 +118,6 @@ func TestAllocatePageReusesIDs(t *testing.T) {
 }
 
 func TestAllocatePageWritesToDisk(t *testing.T) {
-	t.Skip("WIP")
 	disk, _ := newDisk(t)
 
 	for i := 0; i < 10; i++ {
@@ -127,24 +126,18 @@ func TestAllocatePageWritesToDisk(t *testing.T) {
 			t.Fatalf("Got error while allocating page %d: %v", i, err)
 		}
 
-		pageFilePath := disk.pageFilePath(page)
-		file, err := os.Open(pageFilePath)
+		pageFile, err := disk.pageFile(page.id)
 		if err != nil {
-			t.Fatalf("Error reading page file of page %d from disk: %v", i, err)
+			t.Fatalf("Error getting page file of page %d: %v", i, err)
 		}
-		defer file.Close()
 
-		data := make([]byte, PageSize)
-		_, err = file.ReadAt(data, int64(i)*int64(PageSize))
+		readPage, err := pageFile.ReadPage(page.id)
 		if err != nil {
 			t.Fatalf("Error reading page %d from page file: %v", i, err)
 		}
 
-		// We expect a zeroed data part for freshly allocated pages
-		dataPart := data[PageMetadataSize:]
-		expected := make([]byte, len(dataPart))
-		if !bytes.Equal(expected, dataPart) {
-			t.Errorf("Expected data part of page on disk to be all zeroes; was %x", dataPart)
+		if !page.Equal(readPage) {
+			t.Errorf("Page from page file differs from allocated page: %+v != %+v", readPage, page)
 		}
 	}
 
@@ -309,28 +302,20 @@ func TestDecodeMetaDataWithInvalidData(t *testing.T) {
 func TestPageFilePath(t *testing.T) {
 	disk := PersistentDisk{Directory: "foo"}
 
-	tests := []struct {
-		pageID int
-		fileID int
-	}{
-		{0, 0},
-		{2, 0},
-		{999, 0},
-		{1000, 1},
-		{4242, 4},
-	}
+	pageIDs := []PageID{0, 2, 999, 1000, 4242}
 
-	for _, test := range tests {
-		fileName := disk.pageFilePath(&Page{id: PageID(test.pageID)})
+	for _, pageID := range pageIDs {
+		fileID := pageID / pagesPerFile
+		fileName := disk.pageFilePath(pageID)
 		expectedFileName := filepath.Join(
 			"foo",
-			fmt.Sprintf("btree.pages.%d", test.fileID),
+			fmt.Sprintf("btree.pages.%d", fileID),
 		)
 
 		if fileName != expectedFileName {
 			t.Errorf(
 				"Expected page %d to yield page file %s; got %s",
-				test.pageID,
+				pageID,
 				expectedFileName,
 				fileName,
 			)

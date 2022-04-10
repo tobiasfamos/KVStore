@@ -207,7 +207,7 @@ func (pf *PageFile) metaDataSize() int {
 	return int(size)
 }
 
-// encodeMetaData() encodes meta data as a byte slice.
+// encodeMetaData encodes meta data as a byte slice.
 func (pf *PageFile) encodeMetaData() []byte {
 	data := make([]byte, PageSize)
 
@@ -237,6 +237,8 @@ func (pf *PageFile) encodeMetaData() []byte {
 }
 
 // loadMetaData loads the PageFile's meta data from file.
+//
+// This will overwrite any currently loaded meta data.
 func (pf *PageFile) loadMetaData() error {
 	file, err := os.Open(pf.Path)
 	if err != nil {
@@ -311,6 +313,9 @@ func (pf *PageFile) decodeMetaData(data []byte) error {
 }
 
 // exists checks whether the page file already exists on disk
+//
+// For a freshly created page, exists will return false. However once the page
+// has been initialized for the first time it should always return true.
 func (pf *PageFile) exists() (bool, error) {
 	file, err := os.Open(pf.Path)
 	if err == nil {

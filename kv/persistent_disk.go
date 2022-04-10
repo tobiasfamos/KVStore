@@ -14,7 +14,13 @@ const metaDataFile = "btree.meta"
 const pageFilePattern = "btree.pages.%d"
 
 // pagesPerFile is the number of pages which will be written to a single file.
-const pagesPerFile = 1000
+// One upper limit of (PageSize - 12) / 8 follows from the requirement that all
+// the meta data of a page file (mostly the page ID -> offset lookup table) has
+// to fit in the first page.
+// For huge pages it might be sensible to set this limit lower, such that the
+// amount of pages per page file do not exceed a few thousand, to keep overhead
+// low, as its meta data structure is rather naive.
+const pagesPerFile = (PageSize - 12) / 8
 
 type PersistentDisk struct {
 	Directory          string
@@ -73,9 +79,9 @@ func (d *PersistentDisk) AllocatePage() (*Page, error) {
 	// - They might end up in a new part of a file which wasn't allocated yet
 	// While it would not be required for recycled pages, as those will
 	// have been zeroed, quickly writing them doesn't hurt us a lot.
-	d.WritePage(&p)
+	err := d.WritePage(&p)
 
-	return &p, nil
+	return &p, err
 }
 
 func (d *PersistentDisk) DeallocatePage(id PageID) {
@@ -83,10 +89,30 @@ func (d *PersistentDisk) DeallocatePage(id PageID) {
 }
 
 func (d *PersistentDisk) ReadPage(id PageID) (*Page, error) {
-	return &Page{}, nil
+	pageFile, err := d.pageFile(id)
+	if err != nil {
+		return &Page{}, err
+	}
+
+	page, err := pageFile.ReadPage(id)
+	if err != nil {
+		return &Page{}, err
+	}
+
+	return page, nil
 }
 
 func (d *PersistentDisk) WritePage(page *Page) error {
+	pageFile, err := d.pageFile(page.id)
+	if err != nil {
+		return err
+	}
+
+	err = pageFile.WritePage(page)
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -184,11 +210,24 @@ func (d *PersistentDisk) metaFilePath() string {
 	return filepath.Join(d.Directory, metaDataFile)
 }
 
+// pageFile returns a PageFile containing the requested page.
+func (d *PersistentDisk) pageFile(id PageID) (*PageFile, error) {
+	path := d.pageFilePath(id)
+
+	pageFile := PageFile{
+		Path:     path,
+		Capacity: pagesPerFile,
+	}
+	err := pageFile.Initialize()
+
+	return &pageFile, err
+}
+
 // pageFilePath returns the file path of the file containing the given page.
-func (d *PersistentDisk) pageFilePath(page *Page) string {
+func (d *PersistentDisk) pageFilePath(id PageID) string {
 	// Assuming e.g. 1000 pages per file, then pages 0 through 999 are
 	// stored in file 0, 1000 through 1999 in file 1, etc.
-	fileID := page.id / pagesPerFile
+	fileID := id / pagesPerFile
 
 	fileName := fmt.Sprintf(pageFilePattern, fileID)
 

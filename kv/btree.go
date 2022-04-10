@@ -48,8 +48,13 @@ func (t *BTree) createInitialTree() error {
 func (t *BTree) Create(config KvStoreConfig) error {
 	numberOfPages := config.memorySize / PageSize
 	newCacheEviction := NewLRUCache(numberOfPages)
-	newRamDisk := NewRAMDisk(config.memorySize, 20000)
-	t.bufferPool = NewBufferPool(numberOfPages, newRamDisk, &newCacheEviction)
+
+	persistentDisk, err := NewPersistentDisk(config.workingDirectory)
+	if err != nil {
+		return err
+	}
+
+	t.bufferPool = NewBufferPool(numberOfPages, persistentDisk, &newCacheEviction)
 
 	if err := t.createInitialTree(); err != nil {
 		return nil
