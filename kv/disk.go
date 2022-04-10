@@ -14,6 +14,9 @@ type Disk interface {
 	WritePage(*Page) error
 	// Occupied returns the number of occupied pages.
 	Occupied() uint
-	// Capacity of this disk.
+	// Total capacity of this disk.
 	Capacity() uint
+	// Close closes the disk, performing all required cleanup for a clean shutdown.
+	// After a close, the disk must not be used anymore.
+	Close() error
 }
