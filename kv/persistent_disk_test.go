@@ -242,7 +242,7 @@ func TestDecodeMetaData(t *testing.T) {
 
 	err := disk.decodeMetaData(metaData)
 	if err != nil {
-		t.Fatalf("Error setting meta data: %v", err)
+		t.Fatalf("Error decoding meta data: %v", err)
 	}
 
 	if disk.nextPageID != 1074701930 {

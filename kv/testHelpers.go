@@ -84,3 +84,23 @@ func (helper *TestHelper) GetTempDir(t *testing.T, id string) string {
 
 	return dir
 }
+
+// GetTempFile creates a generic temporary file within TestHelper's base directory.
+//
+// The supplied ID should be chosen to meaningfully identify the purpose of the file.
+//
+// If creation of the temporary file fails, the test aborts with a fatal error.
+func (helper *TestHelper) GetTempFile(t *testing.T, id string) string {
+	file, err := os.CreateTemp(
+		helper.WorkingDirectory,
+		id,
+	)
+
+	if err != nil {
+		t.Fatalf("Test helper: Unable to create temporary file: %v", err)
+	}
+
+	// We don't care about the fd, only its path
+	file.Close()
+	return file.Name()
+}
