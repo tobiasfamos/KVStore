@@ -1,5 +1,7 @@
 package kv
 
+import "bytes"
+
 // PageSize is the default page size of a whole page.
 // const PageSize = 4096
 const PageSize = 64
@@ -31,4 +33,28 @@ func (p *Page) decrementPinCount() {
 	if p.pinCount > 0 {
 		p.pinCount--
 	}
+}
+
+// Equal compares two pages for equality.
+//
+// Two pages are considered equal only if all their fields including the data
+// slice are equal.
+func (p *Page) Equal(other *Page) bool {
+	if p.id != other.id {
+		return false
+	}
+
+	if p.pinCount != other.pinCount {
+		return false
+	}
+
+	if p.isDirty != other.isDirty {
+		return false
+	}
+
+	if !bytes.Equal(p.data[:], other.data[:]) {
+		return false
+	}
+
+	return true
 }

@@ -61,7 +61,7 @@ func TestReadAndWritePage(t *testing.T) {
 		t.Fatalf("Error reading page %d: %v", page2.id, err)
 	}
 
-	if !comparePage(page1, p1Read) {
+	if !page1.Equal(p1Read) {
 		t.Errorf(
 			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
 			page1.id,
@@ -70,7 +70,7 @@ func TestReadAndWritePage(t *testing.T) {
 		)
 	}
 
-	if !comparePage(page2, p2Read) {
+	if !page2.Equal(p2Read) {
 		t.Errorf(
 			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
 			page2.id,
@@ -119,7 +119,7 @@ func TestWriteNewPagePersistsMetadata(t *testing.T) {
 		t.Fatalf("Error reading page %d: %v", page2.id, err)
 	}
 
-	if !comparePage(page1, p1Read) {
+	if !page1.Equal(p1Read) {
 		t.Errorf(
 			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
 			page1.id,
@@ -128,7 +128,7 @@ func TestWriteNewPagePersistsMetadata(t *testing.T) {
 		)
 	}
 
-	if !comparePage(page2, p2Read) {
+	if !page2.Equal(p2Read) {
 		t.Errorf(
 			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
 			page2.id,
@@ -168,7 +168,7 @@ func TestReadAndWriteFull(t *testing.T) {
 			t.Fatalf("Error reading page %d: %v", i, err)
 		}
 
-		if !comparePage(page, pages[i]) {
+		if !page.Equal(pages[i]) {
 			t.Errorf(
 				"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
 				page.id,
@@ -178,10 +178,6 @@ func TestReadAndWriteFull(t *testing.T) {
 		}
 	}
 
-}
-
-func comparePage(a, b *Page) bool {
-	return a.id == b.id && a.isDirty == b.isDirty && a.pinCount == b.pinCount && a.data == b.data
 }
 
 func TestInitialize(t *testing.T) {
