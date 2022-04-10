@@ -2,9 +2,15 @@ package kv
 
 import (
 	"bytes"
+	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"testing"
 )
+
+// TODO ReadPage should return an error if the page read does not exist
+// TODO and also if it's a recycled one which wasn't reassigned
 
 func TestNewPersistentDisk(t *testing.T) {
 	dir := helper.GetTempDir(t, "persistent_disk")
@@ -40,6 +46,10 @@ func TestAllocatePage(t *testing.T) {
 
 		if len(page.data) != PageDataSize {
 			t.Errorf("Expected page %d data to be of size %d; was %d", i, PageDataSize, len(page.data))
+		}
+
+		if page.data != [PageDataSize]byte{} {
+			t.Errorf("Expected page data to be %d-length zero-byte array, but was %x", PageDataSize, page.data)
 		}
 	}
 
@@ -105,6 +115,39 @@ func TestAllocatePageReusesIDs(t *testing.T) {
 			t.Errorf("Expected reused page to have ID %d; got %d", id, page.id)
 		}
 	}
+}
+
+func TestAllocatePageWritesToDisk(t *testing.T) {
+	t.Skip("WIP")
+	disk, _ := newDisk(t)
+
+	for i := 0; i < 10; i++ {
+		page, err := disk.AllocatePage()
+		if err != nil {
+			t.Fatalf("Got error while allocating page %d: %v", i, err)
+		}
+
+		pageFilePath := disk.pageFilePath(page)
+		file, err := os.Open(pageFilePath)
+		if err != nil {
+			t.Fatalf("Error reading page file of page %d from disk: %v", i, err)
+		}
+		defer file.Close()
+
+		data := make([]byte, PageSize)
+		_, err = file.ReadAt(data, int64(i)*int64(PageSize))
+		if err != nil {
+			t.Fatalf("Error reading page %d from page file: %v", i, err)
+		}
+
+		// We expect a zeroed data part for freshly allocated pages
+		dataPart := data[PageMetadataSize:]
+		expected := make([]byte, len(dataPart))
+		if !bytes.Equal(expected, dataPart) {
+			t.Errorf("Expected data part of page on disk to be all zeroes; was %x", dataPart)
+		}
+	}
+
 }
 
 func TestCapacity(t *testing.T) {
@@ -261,6 +304,38 @@ func TestDecodeMetaDataWithInvalidData(t *testing.T) {
 		}
 	}
 
+}
+
+func TestPageFilePath(t *testing.T) {
+	disk := PersistentDisk{Directory: "foo"}
+
+	tests := []struct {
+		pageID int
+		fileID int
+	}{
+		{0, 0},
+		{2, 0},
+		{999, 0},
+		{1000, 1},
+		{4242, 4},
+	}
+
+	for _, test := range tests {
+		fileName := disk.pageFilePath(&Page{id: PageID(test.pageID)})
+		expectedFileName := filepath.Join(
+			"foo",
+			fmt.Sprintf("btree.pages.%d", test.fileID),
+		)
+
+		if fileName != expectedFileName {
+			t.Errorf(
+				"Expected page %d to yield page file %s; got %s",
+				test.pageID,
+				expectedFileName,
+				fileName,
+			)
+		}
+	}
 }
 
 func newDisk(t *testing.T) (*PersistentDisk, string) {

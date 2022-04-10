@@ -10,7 +10,11 @@ import (
 	"path/filepath"
 )
 
-const metaStoreFile = "btree.meta"
+const metaDataFile = "btree.meta"
+const pageFilePattern = "btree.pages.%d"
+
+// pagesPerFile is the number of pages which will be written to a single file.
+const pagesPerFile = 1000
 
 type PersistentDisk struct {
 	Directory          string
@@ -63,6 +67,13 @@ func (d *PersistentDisk) AllocatePage() (*Page, error) {
 	p := Page{
 		id: id,
 	}
+
+	// We'll write freshly allocated pages to disk. This is required, as:
+	// - They might end up in a new file which does not exist yet
+	// - They might end up in a new part of a file which wasn't allocated yet
+	// While it would not be required for recycled pages, as those will
+	// have been zeroed, quickly writing them doesn't hurt us a lot.
+	d.WritePage(&p)
 
 	return &p, nil
 }
@@ -168,6 +179,18 @@ func (d *PersistentDisk) decodeMetaData(data []byte) error {
 	return nil
 }
 
+// metaFilePath returns the file path of the file containing the meta data.
 func (d *PersistentDisk) metaFilePath() string {
-	return filepath.Join(d.Directory, metaStoreFile)
+	return filepath.Join(d.Directory, metaDataFile)
+}
+
+// pageFilePath returns the file path of the file containing the given page.
+func (d *PersistentDisk) pageFilePath(page *Page) string {
+	// Assuming e.g. 1000 pages per file, then pages 0 through 999 are
+	// stored in file 0, 1000 through 1999 in file 1, etc.
+	fileID := page.id / pagesPerFile
+
+	fileName := fmt.Sprintf(pageFilePattern, fileID)
+
+	return filepath.Join(d.Directory, fileName)
 }
