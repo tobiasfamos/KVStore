@@ -4,6 +4,7 @@ import (
 	"io/ioutil"
 	"log"
 	"os"
+	"testing"
 )
 
 // TestHelper provides a way to get an arbitrary amount of KV stores without
@@ -64,4 +65,22 @@ func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit uint) (Key
 	}
 
 	return &kv, dir
+}
+
+// GetTempDir creates a generic temporary directory within TestHelper's base directory.
+//
+// The supplied ID should be chosen to meaningfully identify the purpose of the directory.
+//
+// If creation of the temporary directory fails, the test aborts with a fatal error.
+func (helper *TestHelper) GetTempDir(t *testing.T, id string) string {
+	dir, err := os.MkdirTemp(
+		helper.WorkingDirectory,
+		id,
+	)
+
+	if err != nil {
+		t.Fatalf("Test helper: Unable to create temporary directory: %v", err)
+	}
+
+	return dir
 }

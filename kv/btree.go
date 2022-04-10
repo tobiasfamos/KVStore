@@ -100,19 +100,12 @@ func (t *BTree) Get(key uint64) ([10]byte, error) {
 
 		l, i := RawNodeFrom(page)
 		if l != nil {
-			println("ROOT ", t.root.GetDebugInfo())
-			println(t.bufferPool.GetDebugInfo())
 			trace += fmt.Sprint(*l.id)
 			leaf = l
 		} else {
 			trace += fmt.Sprint(*i.id, " -> ")
 			lastNode = i
 		}
-	}
-
-	if !printed {
-		printed = true
-		println(trace)
 	}
 
 	value, found := leaf.get(key)
