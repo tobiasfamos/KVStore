@@ -105,7 +105,9 @@ func (pf *PageFile) findEmptyOffset() (uint32, error) {
 
 	// First page is for meta data, so the lowest allowed byte offset for
 	// an actual page is PageSize
-	for i := uint32(PageSize); i < pf.Capacity*PageSize; i += PageSize {
+	// <= Because we want to support pf.Capacity *pages*, not counting the
+	// one used for meta data.
+	for i := uint32(PageSize); i <= pf.Capacity*PageSize; i += PageSize {
 		_, exist := occupied[i]
 		if !exist {
 			return i, nil
@@ -114,7 +116,10 @@ func (pf *PageFile) findEmptyOffset() (uint32, error) {
 
 	// We earlier ensured that we are not full, so we may never get to
 	// here.
-	panic("PageFile.findEmptyOffset(): Unreachable code")
+	panic(fmt.Sprintf(
+		"PageFile.findEmptyOffset(): Unreachable code. Page location map: %+v",
+		pf.PageLocations,
+	))
 }
 
 // ReadPage read the page with the given ID from the file.

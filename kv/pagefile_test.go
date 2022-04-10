@@ -138,6 +138,48 @@ func TestWriteNewPagePersistsMetadata(t *testing.T) {
 	}
 }
 
+func TestReadAndWriteFull(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	pages := make([]*Page, pf.Capacity)
+
+	for i := uint32(0); i < pf.Capacity; i++ {
+		pages[i] = &Page{
+			id:   PageID(i),
+			data: [PageDataSize]byte{},
+		}
+		binary.BigEndian.PutUint32(pages[i].data[:], i)
+	}
+
+	for i := uint32(0); i < pf.Capacity; i++ {
+		err := pf.WritePage(pages[i])
+		if err != nil {
+			t.Fatalf("Error writing page %d: %v", i, err)
+		}
+	}
+
+	if !pf.Full() {
+		t.Errorf("Expected page file to be full; was not")
+	}
+
+	for i := uint32(0); i < pf.Capacity; i++ {
+		page, err := pf.ReadPage(PageID(i))
+		if err != nil {
+			t.Fatalf("Error reading page %d: %v", i, err)
+		}
+
+		if !comparePage(page, pages[i]) {
+			t.Errorf(
+				"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
+				page.id,
+				page,
+				pages[i],
+			)
+		}
+	}
+
+}
+
 func comparePage(a, b *Page) bool {
 	return a.id == b.id && a.isDirty == b.isDirty && a.pinCount == b.pinCount && a.data == b.data
 }
