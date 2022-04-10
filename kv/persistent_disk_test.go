@@ -21,10 +21,8 @@ func TestNewPersistentDisk(t *testing.T) {
 	}
 }
 
-// TODO Test allocate -> close -> open -> allocate, make sure that not getting overlapping page IDs
-
 func TestAllocatePage(t *testing.T) {
-	disk, _ := newDisk(t)
+	disk, dir := newDisk(t)
 
 	for i := 0; i < 10; i++ {
 		page, err := disk.AllocatePage()
@@ -45,6 +43,68 @@ func TestAllocatePage(t *testing.T) {
 		}
 	}
 
+	// Ensure we get sequential IDs after a reload still
+	disk.Close()
+	disk = existingDisk(t, dir)
+
+	for i := 10; i < 20; i++ {
+		page, err := disk.AllocatePage()
+		if err != nil {
+			t.Fatalf("Got error while allocating page %d: %v", i, err)
+		}
+
+		if page.id != PageID(i) {
+			t.Errorf("Expected page %d to have ID %d; got %d", i, i, page.id)
+		}
+	}
+}
+
+func TestAllocatePageReusesIDs(t *testing.T) {
+	disk, dir := newDisk(t)
+
+	for i := 0; i < 10; i++ {
+		_, err := disk.AllocatePage()
+		if err != nil {
+			t.Fatalf("Got error while allocating page %d: %v", i, err)
+		}
+	}
+
+	deallocatedIDs := []PageID{0, 3, 9}
+	for _, id := range deallocatedIDs {
+		disk.DeallocatePage(PageID(id))
+	}
+
+	// Ensure IDs reused in sequence before new ones assigned
+	for _, id := range deallocatedIDs {
+		page, err := disk.AllocatePage()
+		if err != nil {
+			t.Fatalf("Got error while allocating page: %v", err)
+		}
+
+		if page.id != PageID(id) {
+			t.Errorf("Expected reused page to have ID %d; got %d", id, page.id)
+		}
+	}
+
+	// Ensure we reuse IDs after a reload still
+	deallocatedIDs = []PageID{2, 8, 4}
+	for _, id := range deallocatedIDs {
+		disk.DeallocatePage(PageID(id))
+	}
+
+	disk.Close()
+	disk = existingDisk(t, dir)
+
+	for _, id := range deallocatedIDs {
+		page, err := disk.AllocatePage()
+		if err != nil {
+			t.Fatalf("Got error while allocating page: %v", err)
+		}
+
+		if page.id != PageID(id) {
+			t.Errorf("Expected reused page to have ID %d; got %d", id, page.id)
+		}
+	}
 }
 
 func TestCapacity(t *testing.T) {

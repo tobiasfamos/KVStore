@@ -50,11 +50,19 @@ func (d *PersistentDisk) initialize() error {
 }
 
 func (d *PersistentDisk) AllocatePage() (*Page, error) {
-	p := Page{
-		id: d.nextPageID,
+	var id PageID
+
+	if len(d.deallocatedPageIDs) == 0 {
+		id = d.nextPageID
+		d.nextPageID++
+	} else {
+		id = d.deallocatedPageIDs[0]
+		d.deallocatedPageIDs = d.deallocatedPageIDs[1:]
 	}
 
-	d.nextPageID++
+	p := Page{
+		id: id,
+	}
 
 	return &p, nil
 }
