@@ -143,7 +143,8 @@ func comparePage(a, b *Page) bool {
 }
 
 func TestInitialize(t *testing.T) {
-	pf, path := newPageFile(t)
+	// So we can actually sensibly hardcode some values below
+	pf, path := newPageFileWithCapacity(t, 5)
 
 	// Initialize() is called by newPageFile() already.
 	f, err := os.Open(path)
@@ -280,12 +281,12 @@ func TestPageFileDecodeMetaData(t *testing.T) {
 	}
 }
 
-func newPageFile(t *testing.T) (*PageFile, string) {
+func newPageFileWithCapacity(t *testing.T, capacity uint32) (*PageFile, string) {
 	file := helper.GetTempFile(t, "pagefile")
 
 	pf := PageFile{
 		Path:     file,
-		Capacity: 5,
+		Capacity: capacity,
 	}
 
 	// TODO this is a bit ugly. PageFile requires the file to *not* be
@@ -306,4 +307,9 @@ func newPageFile(t *testing.T) (*PageFile, string) {
 	}
 
 	return &pf, file
+}
+
+func newPageFile(t *testing.T) (*PageFile, string) {
+	capacity := (PageSize - 12) / 8 // To make sure meta data fits in one page
+	return newPageFileWithCapacity(t, uint32(capacity))
 }
