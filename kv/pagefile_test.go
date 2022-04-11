@@ -22,6 +22,90 @@ func TestFull(t *testing.T) {
 	}
 }
 
+func TestDeallocatePage(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	page1 := &Page{
+		id:   0,
+		data: [PageDataSize]byte{0x21, 0x30, 0xA0, 0xFB},
+	}
+
+	page2 := &Page{
+		id:   42,
+		data: [PageDataSize]byte{0x00, 0x2},
+	}
+
+	err := pf.WritePage(page1)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page1.id, err)
+	}
+	err = pf.WritePage(page2)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page2.id, err)
+	}
+	// We must read the offset now while it's still present
+	offset, exist := pf.PageLocations[42]
+	if !exist {
+		t.Fatal("Unable to get offset of to-be-deallocated page")
+	}
+
+	err = pf.DeallocatePage(42)
+	if err != nil {
+		t.Fatalf("Error deallocating page: %v", err)
+	}
+
+	_, exist = pf.PageLocations[42]
+	if exist {
+		t.Errorf("Expected deallocated page not to be in location map anymore, but was with offset %d", offset)
+	}
+
+	file, err := os.Open(pf.Path)
+	if err != nil {
+		t.Fatalf("Error opening page file: %v", err)
+	}
+
+	pageData := make([]byte, PageDataSize)
+	_, err = file.ReadAt(pageData, int64(offset))
+	if err != nil {
+		t.Fatalf("Error reading from page file: %v", err)
+	}
+
+	// Deallocated page should be zeroed
+	if !bytes.Equal(pageData, make([]byte, PageDataSize)) {
+		t.Errorf("Expected deallocated page to be zeroed; but was %x", pageData)
+	}
+}
+
+func TestDeallocateUnallocatedPage(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	err := pf.DeallocatePage(42)
+	if err == nil {
+		t.Errorf("Expected error when deallocating unallocated page; got none")
+	}
+}
+
+func TestDeallocatePagePersistsChanges(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	page1 := &Page{
+		id:   0,
+		data: [PageDataSize]byte{0x21, 0x30, 0xA0, 0xFB},
+	}
+	err := pf.WritePage(page1)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page1.id, err)
+	}
+
+	// Reload from disk
+	pf.Initialize()
+
+	offset, exist := pf.PageLocations[42]
+	if exist {
+		t.Errorf("Expected deallocated page not to be in location map anymore, but was with offset %d", offset)
+	}
+}
+
 func TestReadAndWritePage(t *testing.T) {
 	pf, _ := newPageFile(t)
 

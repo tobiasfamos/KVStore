@@ -23,6 +23,43 @@ type PageFile struct {
 	PageLocations map[PageID]uint32
 }
 
+// DeallocatePage deallocates the page with the passed ID.
+//
+// The page is removed from the page file's meta data, as well as zerod on
+// disk. This means a deallocation will incur a write of two PageDataSize'd
+// blocks.
+//
+// If the page is not present in the page file or an IO error is encountered,
+// an error is returned.
+func (pf *PageFile) DeallocatePage(id PageID) error {
+	offset, exist := pf.PageLocations[id]
+	if !exist {
+		return fmt.Errorf("No page with ID %d in this page file", id)
+	}
+
+	// Zero page
+	file, err := os.OpenFile(pf.Path, os.O_WRONLY, 0666)
+	if err != nil {
+		return fmt.Errorf("IO error while trying to open page file: %v", err)
+	}
+	defer file.Close()
+
+	emptyPage := make([]byte, PageDataSize)
+	_, err = file.WriteAt(emptyPage, int64(offset))
+	if err != nil {
+		return fmt.Errorf("IO error while trying to write to page file: %v", err)
+	}
+
+	delete(pf.PageLocations, id)
+	// Persist meta data as we changed the lookup map
+	err = pf.storeMetaData()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // WritePage writes the page to the file.
 //
 // If an IO error is encountered or the file is full, an error is returned.
