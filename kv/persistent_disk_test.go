@@ -4,11 +4,148 @@ import (
 	"bytes"
 	"fmt"
 	"math"
+	"math/rand"
 	"path/filepath"
 	"testing"
 )
 
-// TODO a test which reads/writes thousands of pages to ensure we don't lose anything
+// We'll also assert correctness within this benchmark, so it's a bit of both.
+// Treating it as a benchmark makes sure it won't run as part of normal unit
+// tests though, which is beneficial as it is a tad slow.
+func BenchmarkReadWriteDeallocateLots(b *testing.B) {
+	for benchIter := 0; benchIter < b.N; benchIter++ {
+		disk, dir := newDisk(b)
+
+		// We'll write 10k pages. With a 4KiB page size that will be around 40
+		// MiB, spread across 10 page files. That should trigger any bug with
+		// the fanout to different files.
+
+		pagesToWrite := 10_000
+
+		// Expected contents of pages
+		pages := make(map[PageID][]byte)
+
+		// Allocate pages, fill them with random bytes from above, then write them to disk
+		for i := 0; i < pagesToWrite; i++ {
+			page, err := disk.AllocatePage()
+			if err != nil {
+				b.Fatalf("Error allocating page: %v", err)
+			}
+
+			// Fill with random bytes
+			pages[page.id] = make([]byte, PageDataSize)
+			_, err = rand.Read(pages[page.id])
+			if err != nil {
+				b.Fatalf("Error reading random bytes: %v", err)
+			}
+
+			copy(page.data[:], pages[page.id])
+
+			err = disk.WritePage(page)
+			if err != nil {
+				b.Fatalf("Error writing page: %v", err)
+			}
+		}
+
+		// Close and reopen
+		err := disk.Close()
+		if err != nil {
+			b.Fatalf("Error closing disk: %v", err)
+		}
+		disk = existingDisk(b, dir)
+
+		// First read all of them, ensure they are correct still
+		for id, pageData := range pages {
+			page, err := disk.ReadPage(id)
+			if err != nil {
+				b.Fatalf("Error reading page: %v", err)
+			}
+
+			if !bytes.Equal(pageData, page.data[:]) {
+				b.Fatalf(
+					"Got unexpected data for page %d. Read %x; Expected %x",
+					id,
+					page.data,
+					pages[id],
+				)
+			}
+		}
+
+		// Now deallocate about 20% of pages
+		deallocated := make(map[PageID]bool)
+		for id := range pages {
+			if rand.Intn(10) < 2 {
+				deallocated[id] = true
+				// No, it does not return an error value as per its interface.
+				disk.DeallocatePage(id)
+			}
+		}
+
+		// Close and reopen
+		err = disk.Close()
+		if err != nil {
+			b.Fatalf("Error closing disk: %v", err)
+		}
+		disk = existingDisk(b, dir)
+
+		// And allocate about 50% of the deallocated ones again
+		for i := 0; i < len(deallocated); i++ {
+			if rand.Intn(10) < 1 {
+				page, err := disk.AllocatePage()
+				if err != nil {
+					b.Fatalf("Error allocating page: %v", err)
+				}
+
+				deallocated[page.id] = false
+
+				// And fill it with new data
+				_, err = rand.Read(pages[page.id])
+				if err != nil {
+					b.Fatalf("Error reading random bytes: %v", err)
+				}
+
+				copy(page.data[:], pages[page.id])
+
+				// Write to disk again
+				err = disk.WritePage(page)
+				if err != nil {
+					b.Fatalf("Error writing page: %v", err)
+				}
+			}
+		}
+
+		// Close and reopen
+		err = disk.Close()
+		if err != nil {
+			b.Fatalf("Error closing disk: %v", err)
+		}
+		disk = existingDisk(b, dir)
+
+		// Now read all pages one last time
+		for id, pageData := range pages {
+			// But skip those which were deallocated. We'll use that the
+			// default value of a boolean is false, so no need to check for
+			// existence of the key in the map.
+			if deallocated[id] {
+				continue
+			}
+
+			page, err := disk.ReadPage(id)
+			if err != nil {
+				b.Fatalf("Error reading page: %v", err)
+			}
+
+			if !bytes.Equal(pageData, page.data[:]) {
+				b.Errorf(
+					"Got unexpected data for page %d. Read %x; Expected %x",
+					id,
+					page.data,
+					pageData,
+				)
+			}
+		}
+	}
+}
 
 func TestNewPersistentDisk(t *testing.T) {
 	dir := helper.GetTempDir(t, "persistent_disk")
@@ -351,7 +488,7 @@ func TestPageFilePath(t *testing.T) {
 	}
 }
 
-func newDisk(t *testing.T) (*PersistentDisk, string) {
+func newDisk(t Fatalfer) (*PersistentDisk, string) {
 	dir := helper.GetTempDir(t, "persistent_disk")
 
 	disk, err := NewPersistentDisk(dir)
@@ -364,7 +501,7 @@ func newDisk(t *testing.T) (*PersistentDisk, string) {
 	return pdisk, dir
 }
 
-func existingDisk(t *testing.T, dir string) *PersistentDisk {
+func existingDisk(t Fatalfer, dir string) *PersistentDisk {
 	disk, err := NewPersistentDisk(dir)
 	if err != nil {
 		t.Fatalf("Got error while loading existing persistent disk: %v", err)
