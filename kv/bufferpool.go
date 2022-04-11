@@ -19,6 +19,17 @@ type BufferPool struct {
 	freeFrames []FrameID
 }
 
+func (b *BufferPool) PrintDebugInfo() {
+	for _, fid := range b.pageLookup {
+		lnode, inode := RawNodeFrom(b.pages[fid])
+		if lnode != nil {
+			lnode.PrintDebugInfo()
+		} else {
+			inode.PrintDebugInfo()
+		}
+	}
+}
+
 /*
 NewBufferPool creates a new buffer pool with a given size (number of pages).
 */
