@@ -8,8 +8,6 @@ import (
 	"testing"
 )
 
-// TODO ReadPage should return an error if the page read does not exist
-// TODO and also if it's a recycled one which wasn't reassigned
 // TODO a test which reads/writes thousands of pages to ensure we don't lose anything
 
 func TestNewPersistentDisk(t *testing.T) {
@@ -25,6 +23,36 @@ func TestNewPersistentDisk(t *testing.T) {
 	if pdisk.Directory != dir {
 		t.Errorf("Expected disk to use directory %s; but got %s", dir, pdisk.Directory)
 	}
+}
+
+func TestReadUnallocatedPage(t *testing.T) {
+	disk, _ := newDisk(t)
+
+	// Try reading unallocated page
+	_, err := disk.ReadPage(42)
+	if err == nil {
+		t.Error("Expected error when reading unallocated page; got none")
+	}
+
+	page, err := disk.AllocatePage()
+	if err != nil {
+		t.Fatalf("Got error while allocating page: %v", err)
+	}
+
+	// Try reading previously deallocated page
+	disk.DeallocatePage(page.id)
+	_, err = disk.ReadPage(page.id)
+	if err == nil {
+		t.Error("Expected error when reading deallocated page; got none")
+	}
+
+}
+
+func TestDeallocatePageWithUnallocatedPage(t *testing.T) {
+	disk, _ := newDisk(t)
+
+	// DeallocatePage, per its interface, should always be quiet.
+	disk.DeallocatePage(42)
 }
 
 func TestAllocatePage(t *testing.T) {

@@ -85,10 +85,34 @@ func (d *PersistentDisk) AllocatePage() (*Page, error) {
 }
 
 func (d *PersistentDisk) DeallocatePage(id PageID) {
+	pageFile, err := d.pageFile(id)
+	if err != nil {
+		// Unable to read page file, ID might be out of valid range. So
+		// we won't deallocate the ID.
+		return
+	}
+
+	err = pageFile.DeallocatePage(id)
+	if err != nil {
+		// Error here indicates that the page might not be present in
+		// the page file, or it encountered an IO error. So we won't
+		// deallocate the ID.
+		return
+	}
+
+	// If we got to here we actually deallocated a page on disk, so we can
+	// add it to our slice of IDs to be recycled.
 	d.deallocatedPageIDs = append(d.deallocatedPageIDs, id)
 }
 
 func (d *PersistentDisk) ReadPage(id PageID) (*Page, error) {
+	// Rather than checking whether the ID is valid by:
+	// - Checking it is < nextPageID
+	// - Checking it is not in our (unsorted) slice of deallocated IDs
+	// We will simply try to read from the appropriate page file. That will
+	// trigger that one to read its metadata, and then return an error if
+	// the page does not exist.
+
 	pageFile, err := d.pageFile(id)
 	if err != nil {
 		return &Page{}, err
