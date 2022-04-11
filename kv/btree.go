@@ -112,6 +112,10 @@ func (t *BTree) Put(key uint64, value [10]byte) error {
 	if err != nil {
 		return err
 	}
+	_, found := leaf.get(key)
+	if found {
+		return errors.New("key already exists")
+	}
 
 	if !leaf.isFull() {
 		leaf.insert(key, value)
@@ -230,7 +234,7 @@ func (t *BTree) insertNewRoot(separator uint64, leftPageId PageID, rightPageId P
 
 	t.root = RawINodeFrom(t.rootPage)
 	*t.root.numKeys = 1
-	t.root.keys[0] = math.MaxUint64 / 2
+	t.root.keys[0] = separator
 	t.root.pages[0] = leftPageId
 	t.root.pages[1] = rightPageId
 
