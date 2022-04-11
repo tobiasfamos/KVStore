@@ -175,11 +175,6 @@ func (t *BTree) splitLeaf(visited []*INodePage, leaf *LNodePage, key uint64, val
 }
 
 func (t *BTree) insertToParent(visited []*INodePage, separator uint64, pageID PageID) error {
-	if pageID == PageID(0) {
-		t.insertNewRoot(separator, pageID)
-		return nil
-	}
-
 	last := len(visited) - 1
 	parent := visited[last]
 
@@ -215,10 +210,25 @@ func (t *BTree) splitInternal(visited []*INodePage, child *INodePage) error {
 	if err != nil {
 		return err
 	}
-
+	if len(visited) == 0 {
+		return t.insertNewRoot(separator, leftPage.id, *right.id)
+	}
 	return t.insertToParent(visited, separator, *left.id)
 }
 
-func (t *BTree) insertNewRoot(separator uint64, id PageID) {
-	panic("unimplemented")
+func (t *BTree) insertNewRoot(separator uint64, leftPageId PageID, rightPageId PageID) error {
+	var err error
+	t.rootPage, err = t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+
+	t.root = RawINodeFrom(t.rootPage)
+	*t.root.numKeys = 1
+	t.root.keys[0] = math.MaxUint64 / 2
+	t.root.pages[0] = leftPageId
+	t.root.pages[1] = rightPageId
+
+	return t.bufferPool.UnpinPage(t.rootPage.id, true)
+
 }
