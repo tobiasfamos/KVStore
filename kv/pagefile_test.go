@@ -43,6 +43,7 @@ func TestDeallocatePage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error write page %d: %v", page2.id, err)
 	}
+
 	// We must read the offset now while it's still present
 	offset, exist := pf.PageLocations[42]
 	if !exist {
@@ -54,6 +55,10 @@ func TestDeallocatePage(t *testing.T) {
 		t.Fatalf("Error deallocating page: %v", err)
 	}
 
+	if pf.PageCount != 1 {
+		t.Errorf("Expected page deallocation to have lowered page count to 1 but did not; was %d", pf.PageCount)
+	}
+
 	_, exist = pf.PageLocations[42]
 	if exist {
 		t.Errorf("Expected deallocated page not to be in location map anymore, but was with offset %d", offset)
@@ -63,6 +68,7 @@ func TestDeallocatePage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error opening page file: %v", err)
 	}
+	defer file.Close()
 
 	pageData := make([]byte, PageDataSize)
 	_, err = file.ReadAt(pageData, int64(offset))
@@ -218,6 +224,45 @@ func TestWriteNewPagePersistsMetadata(t *testing.T) {
 			page2.id,
 			p2Read,
 			page2,
+		)
+	}
+}
+
+func TestWritePageAfterDeallocating(t *testing.T) {
+	pf, _ := newPageFile(t)
+
+	page1 := &Page{
+		id:   0,
+		data: [PageDataSize]byte{0x21, 0x30, 0xA0, 0xFB},
+	}
+
+	err := pf.WritePage(page1)
+	if err != nil {
+		t.Fatalf("Error write page %d: %v", page1.id, err)
+	}
+
+	err = pf.DeallocatePage(page1.id)
+	if err != nil {
+		t.Fatalf("Error deallocating page: %v", err)
+	}
+
+	// Now try to write a page with this ID again
+	err = pf.WritePage(page1)
+	if err != nil {
+		t.Errorf("Error writing page with previously deallocated ID: %v", err)
+	}
+
+	p1Read, err := pf.ReadPage(page1.id)
+	if err != nil {
+		t.Fatalf("Error reading page %d: %v", page1.id, err)
+	}
+
+	if !page1.Equal(p1Read) {
+		t.Errorf(
+			"Got unexpected page when reading page %d.\n Got %+v\nExpected %+v",
+			page1.id,
+			p1Read,
+			page1,
 		)
 	}
 }

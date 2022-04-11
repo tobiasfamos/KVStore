@@ -51,6 +51,7 @@ func (pf *PageFile) DeallocatePage(id PageID) error {
 	}
 
 	delete(pf.PageLocations, id)
+	pf.PageCount--
 	// Persist meta data as we changed the lookup map
 	err = pf.storeMetaData()
 	if err != nil {
@@ -247,6 +248,15 @@ func (pf *PageFile) metaDataSize() int {
 // encodeMetaData encodes meta data as a byte slice.
 func (pf *PageFile) encodeMetaData() []byte {
 	data := make([]byte, PageSize)
+
+	// assert that we have a consistent internal state
+	if len(pf.PageLocations) != int(pf.PageCount) {
+		panic(fmt.Sprintf(
+			"PageFile meta data encoding: Inconsistent state encountered.\nPage locations map has %d entries, yet page count is %d\n",
+			len(pf.PageLocations),
+			pf.PageCount,
+		))
+	}
 
 	binary.BigEndian.PutUint32(data[0:4], pf.Capacity)
 	binary.BigEndian.PutUint32(data[4:8], pf.PageCount)
