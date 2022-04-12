@@ -46,7 +46,7 @@ func (helper *TestHelper) Cleanup() {
 // GetEmptyInstance provides a new ready-to-use KV store, with a memory limit
 // of 100MB and a temporary working directory.
 func (helper *TestHelper) GetEmptyInstance() (KeyValueStore, string) {
-	return helper.GetEmptyInstanceWithMemoryLimit(PageSize * (InternalNodeSize + 1))
+	return helper.GetEmptyInstanceWithMemoryLimit(PageSize * (InternalNodeSize + 1) * 100)
 }
 
 // GetEmptyInstanceWithMemoryLimit provides a new ready-to-use KV store with a
