@@ -12,6 +12,15 @@ import (
 //
 // PageFile must be initialized before it can be written to or read from. See
 // the Initialize() method for how to do so.
+//
+// PageFile will automatically issue a write to disk, if required. As such
+// there is no need to manually close or flush the file. As such a value of
+// type PageFile can be discarded at any time with no cleanup required.
+//
+// Known limitations:
+// - The metadata structure of a page file, which governs where in the file a
+//   page is persisted, is rather naive. This will likely cause scalability
+//   issues should the number of pages per file grow all too large.
 type PageFile struct {
 	// Path is the path to the page file's location on disk.
 	Path string

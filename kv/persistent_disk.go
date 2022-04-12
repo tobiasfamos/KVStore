@@ -10,7 +10,12 @@ import (
 	"path/filepath"
 )
 
+// metaDataFile specifies the name of the file used by the persistent disk type
+// to store its meta data.
 const metaDataFile = "btree.meta"
+
+// pageFilePattern specifies the (printf-compatible) pattern which is used to
+// determine the name to use for on-disk page files.
 const pageFilePattern = "btree.pages.%d"
 
 // pagesPerFile is the number of pages which will be written to a single file.
@@ -22,12 +27,51 @@ const pageFilePattern = "btree.pages.%d"
 // low, as its meta data structure is rather naive.
 const pagesPerFile = (PageSize - 12) / 8
 
+// PersistentDisk implements a disk which persists arbitrary pages to disk.
+//
+// Once instantiated it can be queried for pages, told to store pages, asked
+// for a fresh page, and told to deallocate a previously allocated page.
+//
+// This type requires initialization, and as such should only be created via
+// the NewPersistentDisk() function.
+//
+// Once all page operations are done, Close() must be called to make the disk
+// persist its meta data.
+//
+// Pages are stored in separate files on disk, with each such page file
+// containing pagesPerFile pages grouped together. Assignment of pages to page
+// files happens based on pages' IDs.
+// This does mean that initial allocations of sequential pages will be stored
+// local to each other, but that later on, when pages have been recycled and
+// page IDs of sequential data are not sequential anymore, disk access will be
+// fragmented.
+//
+// Known limitations:
+// - A page's ID determining the file it is stored in means that, once page IDs
+//   are reused, sequential pages in terms of the user might not be sequential
+//   in terms of the disk.
+// - Deallocated pages are currently kept fully in memory in a slice. This
+//   could lead to significant memory usage if a lot of pages are deallocated
+//   without new ones being allocated.
+// - While PersistentDisk does know about which pages are allocated, these
+//   checks are delegated to the underlying PageFile. This does imply that each
+//   read of a page, even if the page does not exist, will cause at least one
+//   read from disk. As this is something which should not happen anyway, this
+//   seems fine.
 type PersistentDisk struct {
 	Directory          string
 	nextPageID         PageID
 	deallocatedPageIDs []PageID
 }
 
+// NewPersistentDisk initializes a new persistent disk.
+//
+// If the supplied directory already contains pages persisted to disk -
+// governed by the existence of the meta data store - then the persistent disk
+// is initialized from that directory. Otherwise a new persistent disk is
+// initialized in this directory.
+//
+// An error is returned if initialization fails.
 func NewPersistentDisk(directory string) (Disk, error) {
 	d := &PersistentDisk{
 		Directory: directory,
@@ -59,6 +103,11 @@ func (d *PersistentDisk) initialize() error {
 	return d.loadMetaData()
 }
 
+// AllocatePage allocates a new unused page.
+//
+// The new page will be assigned the lowest unused page ID.
+//
+// An error is returned if page allocation fails.
 func (d *PersistentDisk) AllocatePage() (*Page, error) {
 	var id PageID
 
@@ -84,6 +133,12 @@ func (d *PersistentDisk) AllocatePage() (*Page, error) {
 	return &p, err
 }
 
+// DeallocatePage deallocates a page.
+//
+// This will both delete the page from the meta data store, as well as
+// physically zero its content on disk.
+//
+// Trying to deallocate an unallocated page will be a no-op, not having any effect.
 func (d *PersistentDisk) DeallocatePage(id PageID) {
 	pageFile, err := d.pageFile(id)
 	if err != nil {
@@ -105,6 +160,10 @@ func (d *PersistentDisk) DeallocatePage(id PageID) {
 	d.deallocatedPageIDs = append(d.deallocatedPageIDs, id)
 }
 
+// ReadPage reads the page with the specified ID from disk.
+//
+// If no page with this ID exists, or an IO error is encountered while reading
+// the page, an error is returned.
 func (d *PersistentDisk) ReadPage(id PageID) (*Page, error) {
 	// Rather than checking whether the ID is valid by:
 	// - Checking it is < nextPageID
@@ -126,6 +185,12 @@ func (d *PersistentDisk) ReadPage(id PageID) (*Page, error) {
 	return page, nil
 }
 
+// WritePage writes the given page to disk.
+//
+// The page must have previously been allocated via AllocatePage. Trying to
+// write a page which has not ben allocated will return an error.
+//
+// An error is returned if an IO error is encountered.
 func (d *PersistentDisk) WritePage(page *Page) error {
 	pageFile, err := d.pageFile(page.id)
 	if err != nil {
@@ -140,15 +205,22 @@ func (d *PersistentDisk) WritePage(page *Page) error {
 	return nil
 }
 
+// Occupied returns the number of currently allocated pages.
 func (d *PersistentDisk) Occupied() uint {
 	return uint(d.nextPageID) - uint(len(d.deallocatedPageIDs))
 }
 
+// Capacit returns the maximum number of supported pages.
 func (d *PersistentDisk) Capacity() uint {
 	// PageID is a uint32, we do not enforce any lower limits
 	return math.MaxUint32 + 1
 }
 
+// Close flushes meta data to disk. After having called Close() it is save to
+// discard the PersistentDisk value, as long as no further page operations are
+// issued.
+//
+// An error is returned if an IO error is encountered.
 func (d *PersistentDisk) Close() error {
 	err := d.storeMetaData()
 
