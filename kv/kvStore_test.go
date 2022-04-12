@@ -252,11 +252,11 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 }
 
 func TestSplitRootNode(t *testing.T) {
-	t.Skip("Skipping due to root-splitting bug") // FIXME
+	//t.Skip("Skipping due to root-splitting bug") // FIXME
 	// FIXME: It seems like splitting the root node (or any internal node???) results in an incoherent tree structure
 	// Maybe look at all Node.SplitRight() methods and any usages in the BTree.
 	// I didn't found out exactly where the error came from after long debugging sessions.
-	InsertRandom(t, (NumLeafKeys*NumInternalKeys+1)*2)
+	InsertRandom(t, NumLeafKeys*(NumInternalKeys+1)*100)
 }
 
 func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
@@ -265,9 +265,12 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
 
 	kv, _ := helper.GetEmptyInstance()
 
+	putCounter := uint64(1)
 	for i := uint64(0); i < numberOfKeysToInsert; i++ {
 		a := [10]byte{}
 		keyToPut := r.Uint64()
+		keyToPut = putCounter
+		putCounter++
 		binary.LittleEndian.PutUint64(a[:], keyToPut)
 		err := kv.Put(keyToPut, a)
 
@@ -276,9 +279,14 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
 		}
 	}
 
+	//println(kv.GetDebugInformation())
+
 	// Now read them and ensure they are as expected
+	readCounter := uint64(1)
 	for i := uint64(0); i < numberOfKeysToInsert; i += 1 {
 		expected := r1.Uint64()
+		expected = readCounter
+		readCounter++
 		val, err := kv.Get(expected)
 		if err != nil {
 			t.Errorf("Index %d: Error getting element %d: %v", i, expected, err)

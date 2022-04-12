@@ -36,6 +36,8 @@ type KeyValueStore interface {
 
 	// GetDebugInformation gets some debug stuff.
 	GetDebugInformation() string
+
+	TraverseAll() ([]uint64, [][10]byte)
 }
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
@@ -85,4 +87,8 @@ func (*KvStoreStub) Close() error {
 
 func (*KvStoreStub) GetDebugInformation() string {
 	return "KvStoreStub"
+}
+
+func (*KvStoreStub) TraverseAll() ([]uint64, [][10]byte) {
+	return make([]uint64, 0), make([][10]byte, 0)
 }

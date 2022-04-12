@@ -42,6 +42,11 @@ const (
 	ValuesStartIndex = KeyStartIndex + NumLeafKeys*8
 )
 
+type KeyRange struct {
+	min uint64
+	max uint64
+}
+
 /*
 INodePage is an internal node page that points NumInternalKeys keys to NumInternalKeys + 1 pages in a pyramid scheme.
 The relationship uses less-or-equal for left-sided page IDs, greater for right-sided page IDs.
@@ -129,8 +134,8 @@ func RawINodeFrom(page *Page) *INodePage {
 }
 
 // keyRange returns the (min, max) key range of an INodePage. If the page was empty, it returns (0, 0).
-func (n *INodePage) keyRange() (uint64, uint64) {
-	return n.keys[0], n.keys[util.Max(0, *n.numKeys-1)]
+func (n *INodePage) keyRange() KeyRange {
+	return KeyRange{n.keys[0], n.keys[util.Max(0, *n.numKeys-1)]}
 }
 
 // isFull returns whether the INodePage is full.
@@ -154,8 +159,19 @@ func (n *INodePage) get(key uint64) PageID {
 		panic("invalid state: INodePage should not be empty")
 	}
 
-	idx, _ := search.Binary(key, n.keys[:*n.numKeys])
-	return n.pages[idx]
+	if key <= n.keys[0] {
+		return n.pages[0]
+	}
+
+	for i := uint16(1); i < *n.numKeys; i++ {
+		if key <= n.keys[i] {
+			return n.pages[i]
+		}
+	}
+	return n.pages[*n.numKeys]
+
+	//idx, _ := search.Binary(key, n.keys[:*n.numKeys])
+	//return n.pages[idx]
 }
 
 // rightInsert inserts a new separator into an INodePage, preserving the order of keys.
@@ -191,14 +207,14 @@ func (n *INodePage) rightInsert(key uint64, id PageID) bool {
 //
 // Returns (and zeroes) the last key of the left node as a separator for the parent node (left-biased) and the right node.
 func (n *INodePage) splitRight(pageForRightNode *Page) (uint64, *INodePage) {
-	numKeys := *n.numKeys
-	middle := numKeys / 2
+	totalKeys := *n.numKeys
+	middle := (totalKeys + 1) / 2 // ceiled as the middle gets used as parent separator
 
 	right := RawINodeFrom(pageForRightNode)
 	*right.isDirty = true
-	*right.numKeys = numKeys - middle
-	util.MoveSlice(right.keys[0:*right.numKeys], n.keys[middle:numKeys], 0)
-	util.MoveSlice(right.pages[0:*right.numKeys+1], n.pages[middle:numKeys+1], PageID(0))
+	*right.numKeys = totalKeys - middle
+	util.MoveSlice(right.keys[0:*right.numKeys], n.keys[middle:totalKeys], 0)
+	util.MoveSlice(right.pages[0:*right.numKeys+1], n.pages[middle:totalKeys+1], PageID(0))
 
 	left := n
 	*left.isDirty = true
@@ -222,6 +238,11 @@ func RawLNodeFrom(page *Page) *LNodePage {
 	values := unsafe.Slice((*[10]byte)(unsafe.Pointer(&page.data[ValuesStartIndex])), NumLeafValues)
 
 	return &LNodePage{&page.id, &page.pinCount, &page.isDirty, numKeys, keys, values}
+}
+
+// keyRange returns the (min, max) key range of an INodePage. If the page was empty, it returns (0, 0).
+func (n *LNodePage) keyRange() KeyRange {
+	return KeyRange{n.keys[0], n.keys[util.Max(0, *n.numKeys-1)]}
 }
 
 // isFull returns whether the LNodePage is full.
@@ -281,14 +302,14 @@ func (n *LNodePage) insert(key uint64, value [10]byte) bool {
 //
 // Returns the last key of the left node as a separator for the parent node (left-biased) and the right node.
 func (n *LNodePage) splitRight(pageForRightNode *Page) (uint64, *LNodePage) {
-	numKeys := *n.numKeys
-	middle := numKeys / 2
+	totalKeys := *n.numKeys
+	middle := totalKeys / 2 // floored
 
 	right := RawLNodeFrom(pageForRightNode)
 	*right.isDirty = true
-	*right.numKeys = numKeys - middle
-	util.MoveSlice(right.keys[0:*right.numKeys], n.keys[middle:numKeys], 0)
-	util.MoveSlice(right.values[0:*right.numKeys], n.values[middle:numKeys], [10]byte{})
+	*right.numKeys = totalKeys - middle
+	util.MoveSlice(right.keys[0:*right.numKeys], n.keys[middle:totalKeys], 0)
+	util.MoveSlice(right.values[0:*right.numKeys], n.values[middle:totalKeys], [10]byte{})
 
 	left := n
 	*left.isDirty = true

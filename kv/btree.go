@@ -60,6 +60,35 @@ func (t *BTree) createInitialTree() error {
 	return nil
 }
 
+func (t *BTree) TraverseAll() ([]uint64, [][10]byte) {
+	keys := make([]uint64, 0, 1000)
+	values := make([][10]byte, 0, 1000)
+
+	keys, values = t.traverseNode(t.rootPage, keys, values)
+
+	return keys, values
+}
+
+func (t *BTree) traverseNode(current *Page, keys []uint64, values [][10]byte) ([]uint64, [][10]byte) {
+	l, n := RawNodeFrom(current)
+	if l != nil {
+		keys = append(keys, l.keys[:*l.numKeys]...)
+		values = append(values, l.values[:*l.numKeys]...)
+	} else {
+		for i := 0; i < int(*n.numKeys)+1; i++ {
+			id := n.pages[i]
+			page, err := t.bufferPool.FetchPage(id)
+			if err != nil {
+				panic(err)
+			}
+			keys, values = t.traverseNode(page, keys, values)
+			t.bufferPool.UnpinPage(page.id, false)
+		}
+	}
+
+	return keys, values
+}
+
 func (t *BTree) loadExistingTree() error {
 	var err error
 
@@ -217,8 +246,6 @@ func (t *BTree) GetDebugInformation() string {
 	)
 }
 
-var printed = false
-
 func (t *BTree) Get(key uint64) ([10]byte, error) {
 	if !t.open {
 		panic("Cannot read from closed tree")
@@ -227,7 +254,6 @@ func (t *BTree) Get(key uint64) ([10]byte, error) {
 	lastNode := t.root
 	var leaf *LNodePage
 
-	trace := fmt.Sprint(*lastNode.id, " -> ")
 	// find leaf
 	for leaf == nil {
 		id := lastNode.get(key)
@@ -238,10 +264,8 @@ func (t *BTree) Get(key uint64) ([10]byte, error) {
 
 		l, i := RawNodeFrom(page)
 		if l != nil {
-			trace += fmt.Sprint(*l.id)
 			leaf = l
 		} else {
-			trace += fmt.Sprint(*i.id, " -> ")
 			lastNode = i
 		}
 	}
@@ -338,22 +362,13 @@ func (t *BTree) insertToParent(trace []*INodePage, separator uint64, newRight Pa
 	last := len(trace) - 1
 	parent := trace[last]
 
-	if !parent.isFull() {
-		parent.rightInsert(separator, newRight)
-		// Cleanup
-		for _, internal := range trace {
-			if *internal.id != *t.root.id {
-				t.bufferPool.UnpinPage(*internal.id, true)
-			}
-		}
-	} else {
+	if parent.isFull() {
 		left, right, err := t.splitInternal(trace[:last], parent)
 		if err != nil {
 			return err
 		}
 
-		// insert left if right node has higher values and left node has less-or-equal number of keys.
-		if min, _ := right.keyRange(); min <= separator && *left.numKeys <= *right.numKeys {
+		if left.contains(separator) {
 			left.rightInsert(separator, newRight)
 			t.bufferPool.UnpinPage(*left.id, true)   // override left as dirty
 			t.bufferPool.UnpinPage(*right.id, false) // may still be dirty
@@ -361,6 +376,14 @@ func (t *BTree) insertToParent(trace []*INodePage, separator uint64, newRight Pa
 			right.rightInsert(separator, newRight)
 			t.bufferPool.UnpinPage(*left.id, false)
 			t.bufferPool.UnpinPage(*right.id, true)
+		}
+	} else {
+		parent.rightInsert(separator, newRight)
+		// Cleanup
+		for _, internal := range trace {
+			if *internal.id != *t.root.id {
+				t.bufferPool.UnpinPage(*internal.id, true)
+			}
 		}
 	}
 
