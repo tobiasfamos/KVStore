@@ -1,15 +1,30 @@
 package kv
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 )
+
+// treeMetaDataFile specifies the name of the file used by the tree to store
+// its meta data.
+const treeMetaDataFile = "tree.meta"
 
 type BTree struct {
 	bufferPool BufferPool
 	root       *INodePage
 	rootPage   *Page
+
+	// root directory where tree is persisted to. Will be empty in case of
+	// a memory store.
+	directory string
+
+	// Whether the tree can be read from. If set to false, all read/write
+	// operations will panic.
+	open bool
 }
 
 func (t *BTree) createInitialTree() error {
@@ -45,7 +60,62 @@ func (t *BTree) createInitialTree() error {
 	return nil
 }
 
+func (t *BTree) loadExistingTree() error {
+	var err error
+
+	rootPageID, err := t.loadMetaData()
+	if err != nil {
+		return err
+	}
+
+	t.rootPage, err = t.bufferPool.FetchPage(rootPageID)
+	if err != nil {
+		return err
+	}
+
+	leftPage, err := t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+	_ = RawLNodeFrom(leftPage) // automatically sets isLeaf flag
+
+	rightPage, err := t.bufferPool.NewPage()
+	if err != nil {
+		return err
+	}
+	_ = RawLNodeFrom(rightPage) // automatically sets isLeaf flag
+
+	t.root = RawINodeFrom(t.rootPage)
+	*t.root.isDirty = false // We just read it from disk
+
+	return nil
+}
+
 func (t *BTree) Create(config KvStoreConfig) error {
+	numberOfPages := config.memorySize / PageSize
+	newCacheEviction := NewLRUCache(numberOfPages)
+
+	t.directory = config.workingDirectory
+
+	persistentDisk, err := NewPersistentDisk(config.workingDirectory)
+	if err != nil {
+		return err
+	}
+
+	t.bufferPool = NewBufferPool(numberOfPages, persistentDisk, &newCacheEviction)
+
+	if err := t.createInitialTree(); err != nil {
+		return nil // FIXME: Why do we swall the error?
+	}
+
+	// Tree initialized successfully
+	t.directory = config.workingDirectory
+	t.open = true
+
+	return nil
+}
+
+func (t *BTree) Open(config KvStoreConfig) error {
 	numberOfPages := config.memorySize / PageSize
 	newCacheEviction := NewLRUCache(numberOfPages)
 
@@ -56,27 +126,86 @@ func (t *BTree) Create(config KvStoreConfig) error {
 
 	t.bufferPool = NewBufferPool(numberOfPages, persistentDisk, &newCacheEviction)
 
-	if err := t.createInitialTree(); err != nil {
-		return nil
+	// Must be set before we load the tree, as it's used by it
+	t.directory = config.workingDirectory
+
+	if err := t.loadExistingTree(); err != nil {
+		return err
 	}
+
+	// Tree loaded successfully
+	t.open = true
+	return nil
+}
+
+func (t *BTree) Delete() error {
+	if !t.open {
+		panic("Cannot delete closed tree")
+	}
+
+	err := os.RemoveAll(t.directory)
+	if err != nil {
+		return fmt.Errorf("IO error while deleting store directory: %v", err)
+	}
+
+	t.open = false
 
 	return nil
 }
 
-func (t *BTree) Open(path string) error {
-	//TODO implement me
-	panic("implement me")
-}
-
-func (t *BTree) Delete() error {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (t *BTree) Close() error {
-	t.bufferPool.GetDebugInfo()
-	//TODO implement me
-	panic("implement me")
+	if !t.open {
+		panic("Cannot close closed tree")
+	}
+
+	err := t.bufferPool.Close()
+	if err != nil {
+		return fmt.Errorf("Error closing buffer pool: %v", err)
+	}
+
+	// Now we'll only need to persist our own meta data, and we're golden.
+	return t.storeMetaData()
+}
+
+func (t *BTree) loadMetaData() (rootPageID PageID, err error) {
+	data := make([]byte, 4)
+
+	metaFilePath := filepath.Join(t.directory, treeMetaDataFile)
+	file, err := os.Open(metaFilePath)
+	if err != nil {
+		return rootPageID, fmt.Errorf("IO error while opening tree meta data file: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.ReadAt(data, 0)
+	if err != nil {
+		return rootPageID, fmt.Errorf("IO error while reading tree meta data file: %v", err)
+	}
+
+	rootPageID = PageID(binary.BigEndian.Uint32(data))
+
+	return rootPageID, nil
+}
+
+func (t *BTree) storeMetaData() error {
+	data := make([]byte, 4)
+	// Root page ID
+	binary.BigEndian.PutUint32(data[0:4], uint32(t.rootPage.id))
+
+	metaFilePath := filepath.Join(t.directory, treeMetaDataFile)
+	// We can simply truncate it
+	file, err := os.Create(metaFilePath)
+	if err != nil {
+		return fmt.Errorf("IO error while opening tree meta data file: %v", err)
+	}
+	defer file.Close()
+
+	_, err = file.Write(data)
+	if err != nil {
+		return fmt.Errorf("IO error while writing tree meta data: %v", err)
+	}
+
+	return nil
 }
 
 func (t *BTree) GetDebugInformation() string {
@@ -91,6 +220,10 @@ func (t *BTree) GetDebugInformation() string {
 var printed = false
 
 func (t *BTree) Get(key uint64) ([10]byte, error) {
+	if !t.open {
+		panic("Cannot read from closed tree")
+	}
+
 	lastNode := t.root
 	var leaf *LNodePage
 
@@ -122,6 +255,10 @@ func (t *BTree) Get(key uint64) ([10]byte, error) {
 }
 
 func (t *BTree) Put(key uint64, value [10]byte) error {
+	if !t.open {
+		panic("Cannot write to closed tree")
+	}
+
 	trace, leaf, err := t.traceTo(key)
 	if err != nil {
 		return err

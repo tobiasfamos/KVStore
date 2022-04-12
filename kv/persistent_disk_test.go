@@ -474,7 +474,7 @@ func TestPageFilePath(t *testing.T) {
 		fileName := disk.pageFilePath(pageID)
 		expectedFileName := filepath.Join(
 			"foo",
-			fmt.Sprintf("btree.pages.%d", fileID),
+			fmt.Sprintf(diskPageFilePattern, fileID),
 		)
 
 		if fileName != expectedFileName {

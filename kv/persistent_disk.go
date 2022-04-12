@@ -10,13 +10,13 @@ import (
 	"path/filepath"
 )
 
-// metaDataFile specifies the name of the file used by the persistent disk type
+// diskMetaDataFile specifies the name of the file used by the persistent disk type
 // to store its meta data.
-const metaDataFile = "btree.meta"
+const diskMetaDataFile = "disk.meta"
 
-// pageFilePattern specifies the (printf-compatible) pattern which is used to
+// diskPageFilePattern specifies the (printf-compatible) pattern which is used to
 // determine the name to use for on-disk page files.
-const pageFilePattern = "btree.pages.%d"
+const diskPageFilePattern = "disk.pages.%d"
 
 // pagesPerFile is the number of pages which will be written to a single file.
 // One upper limit of (PageSize - 12) / 8 follows from the requirement that all
@@ -303,7 +303,7 @@ func (d *PersistentDisk) decodeMetaData(data []byte) error {
 
 // metaFilePath returns the file path of the file containing the meta data.
 func (d *PersistentDisk) metaFilePath() string {
-	return filepath.Join(d.Directory, metaDataFile)
+	return filepath.Join(d.Directory, diskMetaDataFile)
 }
 
 // pageFile returns a PageFile containing the requested page.
@@ -325,7 +325,7 @@ func (d *PersistentDisk) pageFilePath(id PageID) string {
 	// stored in file 0, 1000 through 1999 in file 1, etc.
 	fileID := id / pagesPerFile
 
-	fileName := fmt.Sprintf(pageFilePattern, fileID)
+	fileName := fmt.Sprintf(diskPageFilePattern, fileID)
 
 	return filepath.Join(d.Directory, fileName)
 }

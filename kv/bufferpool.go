@@ -174,6 +174,24 @@ func (b *BufferPool) FlushAllPages() []error {
 	return errs
 }
 
+// Close prepares flushes all pages and closes the underlying disk.
+//
+// Once Close() has been called, the buffer pool has persisted all data to disk
+// and can thus be safely deallocated.
+func (b *BufferPool) Close() error {
+	errors := b.FlushAllPages()
+	if len(errors) != 0 {
+		return fmt.Errorf("Errors while flushing pages to disk: %v", errors)
+	}
+
+	err := b.disk.Close()
+	if err != nil {
+		return fmt.Errorf("Error closing disk: %v", err)
+	}
+
+	return nil
+}
+
 /*
 DeletePage deletes a page from the buffer pool and disk.
 
