@@ -194,10 +194,10 @@ func (n *INodePage) splitLeft(pageForLeftNode *Page) (*INodePage, uint64) {
 	copy(left.keys[:], n.keys[:middle])
 	copy(left.pages[:], n.pages[:middle])
 
-	*n.numKeys = *n.numKeys - middle
 	*n.isDirty = true
 	util.ShiftLeftBy(n.keys, middle, *n.numKeys, middle)
 	util.ShiftLeftBy(n.pages, middle, *n.numKeys+1, middle)
+	*n.numKeys = *n.numKeys - middle
 
 	lastValid := util.Max(0, *left.numKeys-1)
 	separator := (left.keys[lastValid] + n.keys[0]) / 2
