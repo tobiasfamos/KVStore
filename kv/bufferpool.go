@@ -30,6 +30,18 @@ func (b *BufferPool) PrintDebugInfo() {
 	}
 }
 
+func (b *BufferPool) PrintDebugInfoBy(id PageID) {
+	for _, fid := range b.pageLookup {
+		lnode, inode := RawNodeFrom(b.pages[fid])
+		if lnode != nil && *lnode.id == id {
+			lnode.PrintDebugInfo()
+		}
+		if inode != nil && *inode.id == id {
+			inode.PrintDebugInfo()
+		}
+	}
+}
+
 /*
 NewBufferPool creates a new buffer pool with a given size (number of pages).
 */

@@ -253,7 +253,7 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 }
 
 func TestSplitRootNode(t *testing.T) {
-	InsertRandom(t, 100000)
+	InsertRandom(t, 54645)
 }
 
 func InsertRandom(t *testing.T, numberOfKeysToInsert int) {
@@ -271,6 +271,8 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert int) {
 			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
 		}
 	}
+	kv.PrintDebugInfoBy(PageID(103))
+	kv.PrintDebugInfoBy(PageID(342))
 
 	// Now read them and ensure they are as expected
 	for i := 0; i < numberOfKeysToInsert; i += 1 {

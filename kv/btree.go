@@ -2,6 +2,7 @@ package kv
 
 import (
 	"errors"
+	"fmt"
 	"math"
 )
 
@@ -77,6 +78,10 @@ func (t *BTree) Close() error {
 
 func (t *BTree) PrintDebugInformation() {
 	t.bufferPool.PrintDebugInfo()
+}
+
+func (t *BTree) PrintDebugInfoBy(id PageID) {
+	t.bufferPool.PrintDebugInfoBy(id)
 }
 
 func (t *BTree) Get(key uint64) ([10]byte, error) {

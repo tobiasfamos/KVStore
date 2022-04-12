@@ -36,6 +36,9 @@ type KeyValueStore interface {
 
 	// PrintDebugInformation prints some debug stuff to the logger.
 	PrintDebugInformation()
+
+	// Print Debug Information
+	PrintDebugInfoBy(id PageID)
 }
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
