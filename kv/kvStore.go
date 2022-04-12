@@ -24,7 +24,7 @@ type KeyValueStore interface {
 
 	// Open opens an existing KV store from disk. If loading fails, an
 	// error is returned.
-	Open(path string) error
+	Open(config KvStoreConfig) error
 
 	// Delete deletes the currently opened KV store. If deletion fails, an
 	// error is returned.

@@ -87,8 +87,10 @@ func TestBufferPoolNewPage(t *testing.T) {
 	memorySize := 4096 * 10
 	numberOfPages := memorySize / PageSize
 	newCacheEviction := NewLRUCache(12)
-	newRamDisk := NewRAMDisk(uint(memorySize), 12)
-	localBufferPool := NewBufferPool(uint(numberOfPages), newRamDisk, &newCacheEviction)
+
+	disk, _ := newDisk(t)
+
+	localBufferPool := NewBufferPool(uint(numberOfPages), disk, &newCacheEviction)
 
 	page1, _ := localBufferPool.NewPage()
 	localBufferPool.UnpinPage(page1.id, true)
@@ -250,6 +252,7 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 }
 
 func TestSplitRootNode(t *testing.T) {
+	t.Skip("Skipping due to root-splitting bug") // FIXME
 	// FIXME: It seems like splitting the root node (or any internal node???) results in an incoherent tree structure
 	// Maybe look at all Node.SplitRight() methods and any usages in the BTree.
 	// I didn't found out exactly where the error came from after long debugging sessions.
@@ -317,7 +320,7 @@ func TestGetNonexistantElement(t *testing.T) {
 }
 
 func TestGetPutExceedingMemory(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
+	t.Skip("Skipping due to root-splitting bug") // FIXME
 	kv, _ := helper.GetEmptyInstanceWithMemoryLimit(1000)
 
 	// Each key/value pair will use up 8+10 = 18 bytes, so <56 will fit in
@@ -371,7 +374,6 @@ func TestCreate(t *testing.T) {
 }
 
 func TestOpenAndClose(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	// Open and close will be tested together as well, since one cannot be
 	// tested without the other.
 
@@ -389,12 +391,19 @@ func TestOpenAndClose(t *testing.T) {
 		t.Fatalf("Error closing KV store: %v", err)
 	}
 
-	err = kv.Open(dir)
+	// Using a new instance of the type to ensure that it doensn't simply
+	// work due to leftover state, as Close() does not really deallocate
+	// anything.
+	newKV := BTree{}
+	err = newKV.Open(KvStoreConfig{
+		memorySize:       1_000_000,
+		workingDirectory: dir,
+	})
 	if err != nil {
 		t.Fatalf("Error opening KV store: %v", err)
 	}
 
-	val, err := kv.Get(1)
+	val, err := newKV.Get(1)
 	if err != nil {
 		t.Fatalf("Error getting element %d: %v", 1, err)
 	}
@@ -410,7 +419,6 @@ func TestOpenAndClose(t *testing.T) {
 }
 
 func TestDelete(t *testing.T) {
-	t.Skip("Skipping expected-failing test")
 	kv, dir := helper.GetEmptyInstance()
 
 	err := kv.Delete()

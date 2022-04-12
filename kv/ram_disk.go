@@ -69,3 +69,8 @@ func (r *RAMDisk) Occupied() uint {
 func (r *RAMDisk) Capacity() uint {
 	return r.maxPagesOnDisk
 }
+
+// Close is a no-op for a RAM disk, as there is nothing to persist.
+func (r *RAMDisk) Close() error {
+	return nil
+}

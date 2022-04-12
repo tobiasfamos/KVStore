@@ -12,6 +12,12 @@ type TestHelper struct {
 	WorkingDirectory string
 }
 
+// Fatalfer is an interface for types providing a Fatalf function, intended to
+// log and abort.
+type Fatalfer interface {
+	Fatalf(string, ...any)
+}
+
 // Initialize initializes the helper.
 //
 // This should be called in the test suite's setup method.
@@ -64,4 +70,42 @@ func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit uint) (Key
 	}
 
 	return &kv, dir
+}
+
+// GetTempDir creates a generic temporary directory within TestHelper's base directory.
+//
+// The supplied ID should be chosen to meaningfully identify the purpose of the directory.
+//
+// If creation of the temporary directory fails, the test aborts with a fatal error.
+func (helper *TestHelper) GetTempDir(t Fatalfer, id string) string {
+	dir, err := os.MkdirTemp(
+		helper.WorkingDirectory,
+		id,
+	)
+
+	if err != nil {
+		t.Fatalf("Test helper: Unable to create temporary directory: %v", err)
+	}
+
+	return dir
+}
+
+// GetTempFile creates a generic temporary file within TestHelper's base directory.
+//
+// The supplied ID should be chosen to meaningfully identify the purpose of the file.
+//
+// If creation of the temporary file fails, the test aborts with a fatal error.
+func (helper *TestHelper) GetTempFile(t Fatalfer, id string) string {
+	file, err := os.CreateTemp(
+		helper.WorkingDirectory,
+		id,
+	)
+
+	if err != nil {
+		t.Fatalf("Test helper: Unable to create temporary file: %v", err)
+	}
+
+	// We don't care about the fd, only its path
+	file.Close()
+	return file.Name()
 }
