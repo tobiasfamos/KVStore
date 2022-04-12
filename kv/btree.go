@@ -2,7 +2,6 @@ package kv
 
 import (
 	"errors"
-	"fmt"
 	"math"
 )
 
