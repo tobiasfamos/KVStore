@@ -371,12 +371,18 @@ func (t *BTree) insertToParent(trace []*INodePage, separator uint64, newRight Pa
 	parent := trace[last]
 
 	if parent.isFull() {
-		left, right, err := t.splitInternal(trace[:last], parent)
+		left, right, newParentSeparator, err := t.splitInternal(trace[:last], parent)
 		if err != nil {
 			return err
 		}
 
-		if right.keyRange().min > separator {
+		// separator is the key we were asked to insert into us, but we
+		// first had to split ourselves.
+		// newSeparator is the separator key resulting from us having
+		// split ourselves.
+		// It thus governs in which of our two halves separator will
+		// have to be inserted.
+		if separator <= newParentSeparator {
 			left.rightInsert(separator, newRight)
 			t.bufferPool.UnpinPage(*left.id, true)   // override left as dirty
 			t.bufferPool.UnpinPage(*right.id, false) // may still be dirty
@@ -398,10 +404,10 @@ func (t *BTree) insertToParent(trace []*INodePage, separator uint64, newRight Pa
 	return nil
 }
 
-func (t *BTree) splitInternal(trace []*INodePage, splittingNode *INodePage) (*INodePage, *INodePage, error) {
+func (t *BTree) splitInternal(trace []*INodePage, splittingNode *INodePage) (*INodePage, *INodePage, uint64, error) {
 	rightPage, err := t.bufferPool.NewPage()
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 
 	separator, right := splittingNode.splitRight(rightPage)
@@ -413,17 +419,17 @@ func (t *BTree) splitInternal(trace []*INodePage, splittingNode *INodePage) (*IN
 			panic("DEV: logic error")
 		}
 		if err = t.createNewRoot(separator, *left.id, *right.id); err != nil {
-			return nil, nil, err
+			return nil, nil, separator, err
 		}
 		trace = []*INodePage{t.root}
 	}
 
 	// add the split to the parent
 	if err = t.insertToParent(trace, separator, *right.id); err != nil {
-		return nil, nil, err
+		return nil, nil, separator, err
 	}
 
-	return left, right, nil
+	return left, right, separator, nil
 }
 
 func (t *BTree) createNewRoot(separator uint64, leftID PageID, rightID PageID) error {

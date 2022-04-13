@@ -3,12 +3,14 @@ package kv
 import (
 	"encoding/binary"
 	"errors"
-	"github.com/tobiasfamos/KVStore/util"
-	"golang.org/x/exp/slices"
 	"io/ioutil"
+	"log"
 	"math/rand"
 	"os"
 	"testing"
+	"time"
+
+	"github.com/tobiasfamos/KVStore/util"
 )
 
 var helper = TestHelper{}
@@ -253,11 +255,19 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 
 }
 
-func TestSplitRootNode(t *testing.T) {
-	InsertRandom(t, NumLeafKeys*(NumInternalKeys+1)*100)
+// Handling this as a benchmark as it'll take a few dozen seconds.
+func BenchmarkSplitRootNode(b *testing.B) {
+	// This will cause at least two splits of the root node
+	InsertRandom(b, NumLeafKeys*(NumInternalKeys+1)*(NumInternalKeys+1))
 }
 
-func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
+// InsertRandom inserts a random amount of key/value pairs, then checks that
+// they all are as expected.
+//
+// As it is used by both tests and benchmarks, it accepts a type implementing
+// both interfaces.
+func InsertRandom(b TestOrBenchmark, numberOfKeysToInsert uint64) {
+	log.Printf("Inserting a total of %d keys\n", numberOfKeysToInsert)
 	toInsert := make([]uint64, numberOfKeysToInsert)
 	util.FillAsc(toInsert, 1)
 	util.Shuffle(toInsert)
@@ -266,38 +276,41 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
 
 	kv, _ := helper.GetEmptyInstance()
 
+	// Report progress every 15s
+	reportEvery := time.Duration(15_000_000_000)
+	lastReport := time.Now()
+
 	for i := uint64(0); i < numberOfKeysToInsert; i++ {
+		if time.Now().Sub(lastReport) > reportEvery {
+			log.Printf("%d KV pairs written\n", i)
+			lastReport = time.Now()
+		}
 		a := [10]byte{}
-		//keyToPut := r.Uint64()
 		keyToPut := toInsert[i]
 		binary.LittleEndian.PutUint64(a[:], keyToPut)
+
 		err := kv.Put(keyToPut, a)
 
 		if err != nil {
-			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
-		}
-		{
-			keys, _ := kv.TraverseAll()
-			sorted := slices.IsSorted(keys)
-			if !sorted {
-				println("Index ", i, ": keys no longer sorted")
-			}
+			b.Errorf("Expected no error when putting key: %d; Got %v", i, err)
 		}
 	}
 
-	//println(kv.GetDebugInformation())
-
+	log.Println("Done with inserting keys, checking them all now")
 	// Now read them and ensure they are as expected
 	for i := uint64(0); i < numberOfKeysToInsert; i += 1 {
-		//expected := r1.Uint64()
+		if time.Now().Sub(lastReport) > reportEvery {
+			log.Printf("%d KV pairs checked\n", i)
+			lastReport = time.Now()
+		}
 		expected := toInsert[i]
 		val, err := kv.Get(expected)
 		if err != nil {
-			t.Errorf("Index %d: Error getting element %d: %v", i, expected, err)
+			b.Errorf("Index %d: Error getting element %d: %v", i, expected, err)
 		}
 		convertedVal := binary.LittleEndian.Uint64(val[:])
 		if convertedVal != expected {
-			t.Errorf(
+			b.Errorf(
 				"Index: %d, Got unexpected value %d for key %d; expected %d",
 				i,
 				convertedVal,

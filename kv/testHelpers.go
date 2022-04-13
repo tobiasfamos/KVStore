@@ -12,10 +12,12 @@ type TestHelper struct {
 	WorkingDirectory string
 }
 
-// Fatalfer is an interface for types providing a Fatalf function, intended to
-// log and abort.
-type Fatalfer interface {
+// TestOrBenchmark is an interface for types providing an interface common to
+// the Test and Benchmark interfaces of the testing package.
+// Only those functions which we actually used are defined in here.
+type TestOrBenchmark interface {
 	Fatalf(string, ...any)
+	Errorf(string, ...any)
 }
 
 // Initialize initializes the helper.
@@ -44,9 +46,13 @@ func (helper *TestHelper) Cleanup() {
 }
 
 // GetEmptyInstance provides a new ready-to-use KV store, with a memory limit
-// of 100MB and a temporary working directory.
+// sufficient to fit 1_000_000 pages
+// This must be chosen large enough that none of the benchmark tests have to
+// permanently swap to and from disk, as there's a lot of potential for
+// improvement of performance.
+// (Read: Our non-memory performance is dirt poor).
 func (helper *TestHelper) GetEmptyInstance() (KeyValueStore, string) {
-	return helper.GetEmptyInstanceWithMemoryLimit(PageSize * (InternalNodeSize + 1) * 100)
+	return helper.GetEmptyInstanceWithMemoryLimit(PageSize * 1_000_000)
 }
 
 // GetEmptyInstanceWithMemoryLimit provides a new ready-to-use KV store with a
@@ -77,7 +83,7 @@ func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit uint) (Key
 // The supplied ID should be chosen to meaningfully identify the purpose of the directory.
 //
 // If creation of the temporary directory fails, the test aborts with a fatal error.
-func (helper *TestHelper) GetTempDir(t Fatalfer, id string) string {
+func (helper *TestHelper) GetTempDir(t TestOrBenchmark, id string) string {
 	dir, err := os.MkdirTemp(
 		helper.WorkingDirectory,
 		id,
@@ -95,7 +101,7 @@ func (helper *TestHelper) GetTempDir(t Fatalfer, id string) string {
 // The supplied ID should be chosen to meaningfully identify the purpose of the file.
 //
 // If creation of the temporary file fails, the test aborts with a fatal error.
-func (helper *TestHelper) GetTempFile(t Fatalfer, id string) string {
+func (helper *TestHelper) GetTempFile(t TestOrBenchmark, id string) string {
 	file, err := os.CreateTemp(
 		helper.WorkingDirectory,
 		id,

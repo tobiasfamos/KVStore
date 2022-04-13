@@ -2,9 +2,10 @@ package kv
 
 import (
 	"fmt"
+	"unsafe"
+
 	"github.com/tobiasfamos/KVStore/search"
 	"github.com/tobiasfamos/KVStore/util"
-	"unsafe"
 )
 
 const (

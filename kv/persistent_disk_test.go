@@ -488,7 +488,7 @@ func TestPageFilePath(t *testing.T) {
 	}
 }
 
-func newDisk(t Fatalfer) (*PersistentDisk, string) {
+func newDisk(t TestOrBenchmark) (*PersistentDisk, string) {
 	dir := helper.GetTempDir(t, "persistent_disk")
 
 	disk, err := NewPersistentDisk(dir)
@@ -501,7 +501,7 @@ func newDisk(t Fatalfer) (*PersistentDisk, string) {
 	return pdisk, dir
 }
 
-func existingDisk(t Fatalfer, dir string) *PersistentDisk {
+func existingDisk(t TestOrBenchmark, dir string) *PersistentDisk {
 	disk, err := NewPersistentDisk(dir)
 	if err != nil {
 		t.Fatalf("Got error while loading existing persistent disk: %v", err)
