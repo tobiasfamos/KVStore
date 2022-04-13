@@ -318,15 +318,15 @@ func TestGetNonexistantElement(t *testing.T) {
 }
 
 func TestGetPutExceedingMemory(t *testing.T) {
-	t.Skip("Skipping due to root-splitting bug") // FIXME
-	kv, _ := helper.GetEmptyInstanceWithMemoryLimit(1000)
+	kv, _ := helper.GetEmptyInstanceWithMemoryLimit(9 * PageSize)
 
-	// Each key/value pair will use up 8+10 = 18 bytes, so <56 will fit in
-	// memory.
-	// As such we'll put 100 key-value pairs, which is guaranteed to
-	// overflow to disk.
-	for i := uint64(0); i < 100; i++ {
-		err := kv.Put(i, [10]byte{byte(i)})
+	// Each key/value pair will use up 8+10 = 18 bytes
+	kvPairsPerPage := PageSize / 18
+	// We allocated 9 Pages' worth of memory to the KV store, so now we'll
+	// write 20 pages' worth of KV pairs, that is guaranteed to hit the
+	// disk.
+	for i := 0; i < 20*kvPairsPerPage; i++ {
+		err := kv.Put(uint64(i), [10]byte{byte(i)})
 		if err != nil {
 			t.Errorf("Error putting element %d: %v", i, err)
 		}
