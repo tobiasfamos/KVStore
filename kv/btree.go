@@ -31,18 +31,18 @@ func (t *BTree) createInitialTree() error {
 	var err error
 	t.rootPage, err = t.bufferPool.NewPage()
 	if err != nil {
-		return err
+		return fmt.Errorf("Error allocating page for root node: %v", err)
 	}
 
 	leftPage, err := t.bufferPool.NewPage()
 	if err != nil {
-		return err
+		return fmt.Errorf("Error allocating page for left node: %v", err)
 	}
 	_ = RawLNodeFrom(leftPage) // automatically sets isLeaf flag
 
 	rightPage, err := t.bufferPool.NewPage()
 	if err != nil {
-		return err
+		return fmt.Errorf("Error allocating page for right node: %v", err)
 	}
 	_ = RawLNodeFrom(rightPage) // automatically sets isLeaf flag
 

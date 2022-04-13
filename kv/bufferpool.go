@@ -75,13 +75,13 @@ func (b *BufferPool) NewPage() (*Page, error) {
 	// get next free frame or evict from cache
 	fh := b.getFrame()
 	if fh.err != nil {
-		return nil, fh.err
+		return nil, fmt.Errorf("Error getting frame: %v", fh.err)
 	}
 
 	// allocate new page from disk
 	fh.AllocatePage()
 	if fh.err != nil {
-		return nil, fh.err
+		return nil, fmt.Errorf("Error allocating page on frame: %v", fh.err)
 	}
 
 	fh.page.pinCount = 1
