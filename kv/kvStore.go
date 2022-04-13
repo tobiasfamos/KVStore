@@ -24,7 +24,7 @@ type KeyValueStore interface {
 
 	// Open opens an existing KV store from disk. If loading fails, an
 	// error is returned.
-	Open(path string) error
+	Open(config KvStoreConfig) error
 
 	// Delete deletes the currently opened KV store. If deletion fails, an
 	// error is returned.
@@ -33,6 +33,11 @@ type KeyValueStore interface {
 	// Close persists the active KV store to disk and unloads it. If it
 	// fails, an error is returned.
 	Close() error
+
+	// GetDebugInformation gets some debug stuff.
+	GetDebugInformation() string
+
+	TraverseAll() ([]uint64, [][10]byte)
 }
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
@@ -41,7 +46,7 @@ type KvStoreConfig struct {
 	workingDirectory string // Directory on disk in which KV store will be persisted
 }
 
-func NewKvStoreInstance(size int, path string) (*KeyValueStore, error) {
+func NewKvStoreInstance(size int, path string) (KeyValueStore, error) {
 	if size > MaxMem || size < 0 {
 		return nil, fmt.Errorf("'size' must be between 0 and %d", MaxMem)
 	}
@@ -60,23 +65,30 @@ func (KvStoreStub) Put(key uint64, value [10]byte) error {
 	return nil
 }
 
-func (KvStoreStub) Get(a1 uint64) ([10]byte, error) {
+func (*KvStoreStub) Get(a1 uint64) ([10]byte, error) {
 	return [10]byte{10, 10, 1}, nil
 }
 
-func (KvStoreStub) Open(path string) error {
+func (*KvStoreStub) Open(path string) error {
 	return nil
 }
 
-func (KvStoreStub) Create(config KvStoreConfig) error {
+func (*KvStoreStub) Create(config KvStoreConfig) error {
 	return nil
 }
 
-func (KvStoreStub) Delete() error {
+func (*KvStoreStub) Delete() error {
 	return nil
 
 }
-func (KvStoreStub) Close() error {
+func (*KvStoreStub) Close() error {
 	return nil
+}
 
+func (*KvStoreStub) GetDebugInformation() string {
+	return "KvStoreStub"
+}
+
+func (*KvStoreStub) TraverseAll() ([]uint64, [][10]byte) {
+	return make([]uint64, 0), make([][10]byte, 0)
 }
