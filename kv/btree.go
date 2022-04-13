@@ -134,7 +134,7 @@ func (t *BTree) Create(config KvStoreConfig) error {
 	t.bufferPool = NewBufferPool(numberOfPages, persistentDisk, &newCacheEviction)
 
 	if err := t.createInitialTree(); err != nil {
-		return nil // FIXME: Why do we swall the error?
+		return fmt.Errorf("Unable to initialize tree: %v", err)
 	}
 
 	// Tree initialized successfully
