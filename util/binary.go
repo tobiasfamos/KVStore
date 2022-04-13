@@ -2,6 +2,7 @@ package util
 
 import (
 	"golang.org/x/exp/constraints"
+	"math/rand"
 )
 
 // Fill a slice with a specific value
@@ -9,6 +10,18 @@ func Fill[T any](slice []T, val T) {
 	for i := 0; i < len(slice); i++ {
 		slice[i] = val
 	}
+}
+
+func FillAsc[T constraints.Integer](slice []T, start T) {
+	for i := 0; i < len(slice); i++ {
+		slice[i] = start + T(i)
+	}
+}
+
+func Shuffle[T any](slice []T) {
+	rand.Shuffle(len(slice), func(i, j int) {
+		slice[i], slice[j] = slice[j], slice[i]
+	})
 }
 
 // Filled fills a slice with a specific value and returns it
