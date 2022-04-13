@@ -257,8 +257,10 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 
 // Handling this as a benchmark as it'll take a few dozen seconds.
 func BenchmarkSplitRootNode(b *testing.B) {
-	// This will cause at least two splits of the root node
-	InsertRandom(b, NumLeafKeys*(NumInternalKeys+1)*(NumInternalKeys+1))
+	for benchIter := 0; benchIter < b.N; benchIter++ {
+		// This will cause at least two splits of the root node
+		InsertRandom(b, NumLeafKeys*(NumInternalKeys+1)*(NumInternalKeys+1))
+	}
 }
 
 // InsertRandom inserts a random amount of key/value pairs, then checks that
