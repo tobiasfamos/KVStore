@@ -64,8 +64,9 @@ Then the executable can be ran:
 ```
 
 An example session is shown below:
-```
-› ./KVStore /tmp/test
+```bash
+# Create new store
+› ./KVStore create /tmp/test
 Loading KV store from /tmp/test
 KV Store @ /tmp/test> set 1 0x68656c6c6f
 Successfully stored 1 = 68656c6c6f0000000000
@@ -77,6 +78,14 @@ KV Store @ /tmp/test> get 1
 1 = 68656c6c6f0000000000
 KV Store @ /tmp/test> get 2
 2 = 20776f726c6400000000
+KV Store @ /tmp/test> get 1993
+1993 = 061a0000000000000000
+KV Store @ /tmp/test> exit
+KV store successfully closed
+
+# Open existing store
+› ./KVStore open /tmp/test
+Loading KV store from /tmp/test
 KV Store @ /tmp/test> get 1993
 1993 = 061a0000000000000000
 KV Store @ /tmp/test> exit

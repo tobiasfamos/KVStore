@@ -15,13 +15,14 @@ const memoryLimit = 100_000_000 // 100 MB
 
 func main() {
 	args := os.Args[1:]
-	if c := len(args); c != 1 {
+	if c := len(args); c != 2 {
 		help()
 	}
 
-	dir := args[0]
+	mode := args[0]
+	dir := args[1]
 	fmt.Printf("Loading KV store from %s\n", dir)
-	cli, err := NewCLI(dir)
+	cli, err := NewCLI(dir, mode)
 	if err != nil {
 		abort(fmt.Sprintf("Error loading KV store: %v\nMake sure the target directory exists.\n", err))
 	}
@@ -61,16 +62,24 @@ type CLI struct {
 	store *kv.BTree
 }
 
-func NewCLI(dir string) (*CLI, error) {
+func NewCLI(dir, mode string) (*CLI, error) {
+	var err error
 	cli := CLI{}
 	cli.store = &kv.BTree{}
 
-	err := cli.store.Create(
-		kv.KvStoreConfig{
-			MemorySize:       memoryLimit,
-			WorkingDirectory: dir,
-		},
-	)
+	config := kv.KvStoreConfig{
+		MemorySize:       memoryLimit,
+		WorkingDirectory: dir,
+	}
+
+	switch mode {
+	case "create":
+		err = cli.store.Create(config)
+	case "open":
+		err = cli.store.Open(config)
+	default:
+		err = fmt.Errorf("Invalid mode: %s. Must be one of create, open", mode)
+	}
 
 	if err != nil {
 		return &cli, err
@@ -168,7 +177,7 @@ func (cli *CLI) Help() string {
 }
 
 func help() {
-	fmt.Println("Usage: ./KVStore <persistence_directory>")
+	fmt.Println("Usage: ./KVStore <create|open> <persistence_directory>")
 	os.Exit(2)
 }
 

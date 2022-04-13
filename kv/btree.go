@@ -122,7 +122,7 @@ func (t *BTree) loadExistingTree() error {
 
 func (t *BTree) Create(config KvStoreConfig) error {
 	numberOfPages := config.MemorySize / PageSize
-	// Arbitrarily chosen limit, but anything less than 5 is hardl workable.
+	// Arbitrarily chosen limit, but anything less than 5 is hardly workable.
 	if numberOfPages < 5 {
 		return fmt.Errorf(
 			"Allowed memory limit of %dB only allows for %d pages; we require at least 5 concurrent pages for operation.",
