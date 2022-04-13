@@ -368,7 +368,7 @@ func (t *BTree) insertToParent(trace []*INodePage, separator uint64, newRight Pa
 			return err
 		}
 
-		if left.contains(separator) {
+		if right.keyRange().min > separator {
 			left.rightInsert(separator, newRight)
 			t.bufferPool.UnpinPage(*left.id, true)   // override left as dirty
 			t.bufferPool.UnpinPage(*right.id, false) // may still be dirty
