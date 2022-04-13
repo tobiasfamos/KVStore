@@ -19,7 +19,8 @@ func FillAsc[T constraints.Integer](slice []T, start T) {
 }
 
 func Shuffle[T any](slice []T) {
-	rand.Shuffle(len(slice), func(i, j int) {
+	r := rand.New(rand.NewSource(42))
+	r.Shuffle(len(slice), func(i, j int) {
 		slice[i], slice[j] = slice[j], slice[i]
 	})
 }

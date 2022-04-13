@@ -3,6 +3,8 @@ package kv
 import (
 	"encoding/binary"
 	"errors"
+	"github.com/tobiasfamos/KVStore/util"
+	"golang.org/x/exp/slices"
 	"io/ioutil"
 	"math/rand"
 	"os"
@@ -252,23 +254,34 @@ func TestPutKeyRandomlyMany(t *testing.T) {
 }
 
 func TestSplitRootNode(t *testing.T) {
-	InsertRandom(t, NumLeafKeys*(NumInternalKeys+1)*10)
+	InsertRandom(t, NumLeafKeys*(NumInternalKeys+1)*100)
 }
 
 func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
-	r := rand.New(rand.NewSource(99))
-	r1 := rand.New(rand.NewSource(99))
+	toInsert := make([]uint64, numberOfKeysToInsert)
+	util.FillAsc(toInsert, 1)
+	util.Shuffle(toInsert)
+	//r := rand.New(rand.NewSource(99))
+	//r1 := rand.New(rand.NewSource(99))
 
 	kv, _ := helper.GetEmptyInstance()
 
 	for i := uint64(0); i < numberOfKeysToInsert; i++ {
 		a := [10]byte{}
-		keyToPut := r.Uint64()
+		//keyToPut := r.Uint64()
+		keyToPut := toInsert[i]
 		binary.LittleEndian.PutUint64(a[:], keyToPut)
 		err := kv.Put(keyToPut, a)
 
 		if err != nil {
 			t.Errorf("Expected no error when putting key: %d; Got %v", i, err)
+		}
+		{
+			keys, _ := kv.TraverseAll()
+			sorted := slices.IsSorted(keys)
+			if !sorted {
+				println("Index ", i, ": keys no longer sorted")
+			}
 		}
 	}
 
@@ -276,7 +289,8 @@ func InsertRandom(t *testing.T, numberOfKeysToInsert uint64) {
 
 	// Now read them and ensure they are as expected
 	for i := uint64(0); i < numberOfKeysToInsert; i += 1 {
-		expected := r1.Uint64()
+		//expected := r1.Uint64()
+		expected := toInsert[i]
 		val, err := kv.Get(expected)
 		if err != nil {
 			t.Errorf("Index %d: Error getting element %d: %v", i, expected, err)
