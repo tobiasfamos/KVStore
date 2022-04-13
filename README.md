@@ -50,7 +50,10 @@ going to be a lot of low-hanging fruits throughout.
 
 ## Building the project
 
-To build the project, run:
+The project ships with a toy interactive CLI, which allows to access a KV store
+on disk, and get and set values.
+
+To build it, run:
 ```bash
 go build
 ```
@@ -60,3 +63,22 @@ Then the executable can be ran:
 ./KVStore
 ```
 
+An example session is shown below:
+```
+› ./KVStore /tmp/test
+Loading KV store from /tmp/test
+KV Store @ /tmp/test> set 1 0x68656c6c6f
+Successfully stored 1 = 68656c6c6f0000000000
+KV Store @ /tmp/test> set 2 0x20776f726c64
+Successfully stored 2 = 20776f726c6400000000
+KV Store @ /tmp/test> set 1993 0x061A
+Successfully stored 1993 = 061a0000000000000000
+KV Store @ /tmp/test> get 1
+1 = 68656c6c6f0000000000
+KV Store @ /tmp/test> get 2
+2 = 20776f726c6400000000
+KV Store @ /tmp/test> get 1993
+1993 = 061a0000000000000000
+KV Store @ /tmp/test> exit
+KV store successfully closed
+```

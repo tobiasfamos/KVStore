@@ -121,20 +121,20 @@ func (t *BTree) loadExistingTree() error {
 }
 
 func (t *BTree) Create(config KvStoreConfig) error {
-	numberOfPages := config.memorySize / PageSize
+	numberOfPages := config.MemorySize / PageSize
 	// Arbitrarily chosen limit, but anything less than 5 is hardl workable.
 	if numberOfPages < 5 {
 		return fmt.Errorf(
 			"Allowed memory limit of %dB only allows for %d pages; we require at least 5 concurrent pages for operation.",
-			config.memorySize,
+			config.MemorySize,
 			numberOfPages,
 		)
 	}
 	newCacheEviction := NewLRUCache(numberOfPages)
 
-	t.directory = config.workingDirectory
+	t.directory = config.WorkingDirectory
 
-	persistentDisk, err := NewPersistentDisk(config.workingDirectory)
+	persistentDisk, err := NewPersistentDisk(config.WorkingDirectory)
 	if err != nil {
 		return err
 	}
@@ -146,17 +146,17 @@ func (t *BTree) Create(config KvStoreConfig) error {
 	}
 
 	// Tree initialized successfully
-	t.directory = config.workingDirectory
+	t.directory = config.WorkingDirectory
 	t.open = true
 
 	return nil
 }
 
 func (t *BTree) Open(config KvStoreConfig) error {
-	numberOfPages := config.memorySize / PageSize
+	numberOfPages := config.MemorySize / PageSize
 	newCacheEviction := NewLRUCache(numberOfPages)
 
-	persistentDisk, err := NewPersistentDisk(config.workingDirectory)
+	persistentDisk, err := NewPersistentDisk(config.WorkingDirectory)
 	if err != nil {
 		return err
 	}
@@ -164,7 +164,7 @@ func (t *BTree) Open(config KvStoreConfig) error {
 	t.bufferPool = NewBufferPool(numberOfPages, persistentDisk, &newCacheEviction)
 
 	// Must be set before we load the tree, as it's used by it
-	t.directory = config.workingDirectory
+	t.directory = config.WorkingDirectory
 
 	if err := t.loadExistingTree(); err != nil {
 		return err

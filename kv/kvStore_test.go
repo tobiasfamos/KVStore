@@ -391,8 +391,8 @@ func TestCreate(t *testing.T) {
 
 	err = kv.Create(
 		KvStoreConfig{
-			memorySize:       100_000_000,
-			workingDirectory: dir,
+			MemorySize:       100_000_000,
+			WorkingDirectory: dir,
 		},
 	)
 	if err != nil {
@@ -423,8 +423,8 @@ func TestOpenAndClose(t *testing.T) {
 	// anything.
 	newKV := BTree{}
 	err = newKV.Open(KvStoreConfig{
-		memorySize:       1_000_000,
-		workingDirectory: dir,
+		MemorySize:       1_000_000,
+		WorkingDirectory: dir,
 	})
 	if err != nil {
 		t.Fatalf("Error opening KV store: %v", err)

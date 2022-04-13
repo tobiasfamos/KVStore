@@ -42,8 +42,8 @@ type KeyValueStore interface {
 
 // KVStoreConfig provides parameters used to initialize a new KV store.
 type KvStoreConfig struct {
-	memorySize       uint   // Maximum amount of memory to be used by KV store
-	workingDirectory string // Directory on disk in which KV store will be persisted
+	MemorySize       uint   // Maximum amount of memory to be used by KV store
+	WorkingDirectory string // Directory on disk in which KV store will be persisted
 }
 
 func NewKvStoreInstance(size int, path string) (KeyValueStore, error) {

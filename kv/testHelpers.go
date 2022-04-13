@@ -67,8 +67,8 @@ func (helper *TestHelper) GetEmptyInstanceWithMemoryLimit(memoryLimit uint) (Key
 
 	err = kv.Create(
 		KvStoreConfig{
-			memorySize:       memoryLimit,
-			workingDirectory: dir,
+			MemorySize:       memoryLimit,
+			WorkingDirectory: dir,
 		},
 	)
 	if err != nil {
